@@ -56,19 +56,18 @@ class ESEKF:
     # Hiệp phương sai ban đầu
     self.P = self.P0.copy()
 
-    # Ma trận mật độ hiệp phương sai nhiễu IMU
-    # Thứ tự: [n_ax, n_ay, n_az, n_gx, n_gy, n_gz]
-    var_acc = np.array([1.885e-6, 1.885e-6, 1.885e-6,])
-    var_gyro = np.array([3.7532e-9, 3.7532e-9, 3.7532e-9,])
-    self.Qc = np.diag(
-        np.concatenate([
-            var_acc,
-            var_gyro,
-        ])
-    )
-
     # Chu kỳ lấy mẫu IMU: 200 Hz
     self.delta_t = 0.005  # [s]
+
+    # Continuous-time noise covariance density từ VN-100
+    q_acc_c = 1.88494e-6
+    q_gyro_c = 3.73156e-9
+    self.Qc = np.diag([
+        q_acc_c, q_acc_c, q_acc_c,
+        q_gyro_c, q_gyro_c, q_gyro_c,
+    ])
+    # Covariance của từng mẫu IMU tại dt = 0.005 s (200 Hz)
+    self.Q = self.Qc / self.delta_t
 
     # Vector trọng lực trong hệ tọa độ world
     self.gravity = np.asarray(
