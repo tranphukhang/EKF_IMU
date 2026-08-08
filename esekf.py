@@ -56,6 +56,17 @@ class ESEKF:
     # Hiệp phương sai ban đầu
     self.P = self.P0.copy()
 
+    # Ma trận mật độ hiệp phương sai nhiễu IMU
+    # Thứ tự: [n_ax, n_ay, n_az, n_gx, n_gy, n_gz]
+    var_acc = np.array([1.885e-6, 1.885e-6, 1.885e-6,])
+    var_gyro = np.array([3.7532e-9, 3.7532e-9, 3.7532e-9,])
+    self.Qc = np.diag(
+        np.concatenate([
+            var_acc,
+            var_gyro,
+        ])
+    )
+
     # Chu kỳ lấy mẫu IMU: 200 Hz
     self.delta_t = 0.005  # [s]
 
