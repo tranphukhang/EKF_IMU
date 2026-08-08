@@ -81,6 +81,16 @@ class ESEKF:
     self.predict_print_period = 1.0 / 5.0
     self.last_predict_print_time = -np.inf
 
+  @staticmethod
+  def _skew(vector: np.ndarray) -> np.ndarray:
+      x, y, z = vector
+
+      return np.array([
+          [0.0, -z,   y],
+          [z,    0.0, -x],
+          [-y,   x,   0.0],
+      ])
+
   def predict(
         self,
         acceleration: np.ndarray,
@@ -105,9 +115,25 @@ class ESEKF:
 
     rotation_imu_to_world = rotation_flat.reshape(3, 3)
 
+    # R_{k-1} a_m,k
+    rotated_acceleration = (
+        rotation_imu_to_world @ acceleration
+    )
+
+    # Jacobian trạng thái sai số F_x,k
+    Fx = np.eye(9, dtype=float)
+    Fx[0:3, 3:6] = (
+        np.eye(3) * self.delta_t
+    )
+    Fx[3:6, 6:9] = (
+        -self._skew(rotated_acceleration)
+        * self.delta_t
+    )
+    self.Fx = Fx
+
     # a^w_k = R(q_k-1) a_k + g
     acceleration_world = (
-        rotation_imu_to_world @ acceleration
+        rotated_acceleration
         + self.gravity
     )
 
