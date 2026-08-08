@@ -36,16 +36,32 @@ class SiteTrajectoryVisualizer:
 
     self.times: deque[float] = deque(maxlen=max_points)
     self.positions: deque[np.ndarray] = deque(maxlen=max_points)
+    self.velocities: deque[np.ndarray] = deque(maxlen=max_points)
+    self.quaternions: deque[np.ndarray] = deque(maxlen=max_points)
+
+    # Trạng thái danh định sau bước dự đoán ESEKF
+    self.predicted_positions: deque[np.ndarray] = deque(maxlen=max_points)
+    self.predicted_velocities: deque[np.ndarray] = deque(maxlen=max_points)
+    self.predicted_quaternions: deque[np.ndarray] = deque(maxlen=max_points)
 
     plt.ion()
     self.figure = plt.figure(
       "IMU site trajectory", figsize=(12, 7), constrained_layout=True
     )
-    self.ax_3d = self.figure.add_subplot(1, 2, 1, projection="3d")
-    self.ax_time = self.figure.add_subplot(1, 2, 2)
+    self.ax_3d = self.figure.add_subplot(2, 2, 1, projection="3d")
+    self.ax_time = self.figure.add_subplot(2, 2, 2)
+    self.ax_velocity = self.figure.add_subplot(2, 2, 3)
+    self.ax_quaternion = self.figure.add_subplot(2, 2, 4)
 
     (self.path_line,) = self.ax_3d.plot(
       [], [], [], color="tab:red", linewidth=1.5, label=site_name
+    )
+    (self.predicted_path_line,) = self.ax_3d.plot(
+        [], [], [],
+        color="tab:orange",
+        linestyle="--",
+        linewidth=1.5,
+        label="ESEKF prediction",
     )
     (self.current_point,) = self.ax_3d.plot(
       [], [], [], marker="o", color="black", markersize=5
@@ -56,6 +72,71 @@ class SiteTrajectoryVisualizer:
         for axis, color in zip(
             ("x", "y", "z"),
             ("red", "green", "blue")
+        )
+    ]
+    self.predicted_coordinate_lines = [
+        self.ax_time.plot(
+            [], [],
+            label=f"{axis} dự đoán",
+            color=color,
+            linestyle="--",
+            linewidth=1.2,
+        )[0]
+        for axis, color in zip(
+            ("x-", "y-", "z-"),
+            ("red", "green", "blue"),
+        )
+    ]
+
+    self.velocity_lines = [
+        self.ax_velocity.plot(
+            [], [],
+            label=axis,
+            color=color,
+            linewidth=1.2,
+        )[0]
+        for axis, color in zip(
+            ("vx", "vy", "vz"),
+            ("red", "green", "blue"),
+        )
+    ]
+    self.predicted_velocity_lines = [
+        self.ax_velocity.plot(
+            [], [],
+            label=f"{axis} dự đoán",
+            color=color,
+            linestyle="--",
+            linewidth=1.2,
+        )[0]
+        for axis, color in zip(
+            ("vx-", "vy-", "vz-"),
+            ("red", "green", "blue"),
+        )
+    ]
+
+    self.quaternion_lines = [
+        self.ax_quaternion.plot(
+            [], [],
+            label=component,
+            color=color,
+            linewidth=1.2,
+        )[0]
+        for component, color in zip(
+            ("qw", "qx", "qy", "qz"),
+            ("black", "red", "green", "blue"),
+        )
+    ]
+    self.predicted_quaternion_lines = [
+        self.ax_quaternion.plot(
+            [], [],
+            label=f"{component} dự đoán",
+            color=color,
+            linestyle="--",
+            linewidth=1.2,
+        )[0]
+        for component, color in zip(
+            ("qw-", "qx-", "qy-", "qz-"),
+            ("black", "red", "green", "blue"),
         )
     ]
 
@@ -71,10 +152,28 @@ class SiteTrajectoryVisualizer:
     self.ax_time.grid(True, alpha=0.3)
     self.ax_time.legend(loc="upper right")
 
+    self.ax_velocity.set_title("Vận tốc IMU trong hệ world")
+    self.ax_velocity.set_xlabel("Thời gian [s]")
+    self.ax_velocity.set_ylabel("Vận tốc [m/s]")
+    self.ax_velocity.grid(True, alpha=0.3)
+    self.ax_velocity.legend(loc="upper right")
+
+    self.ax_quaternion.set_title("Quaternion IMU → world")
+    self.ax_quaternion.set_xlabel("Thời gian [s]")
+    self.ax_quaternion.set_ylabel("Giá trị quaternion")
+    self.ax_quaternion.set_ylim(-1.05, 1.05)
+    self.ax_quaternion.grid(True, alpha=0.3)
+    self.ax_quaternion.legend(loc="upper right")
+
     self.figure.show()
     atexit.register(self.close)
 
-  def update(self) -> None:
+  def update(
+      self,
+      predicted_position: np.ndarray,
+      predicted_velocity: np.ndarray,
+      predicted_quaternion: np.ndarray,
+  ) -> None:
     """Record one sample and refresh the plots at the configured plot rate."""
     if not plt.fignum_exists(self.figure.number):
       return
@@ -87,6 +186,68 @@ class SiteTrajectoryVisualizer:
 
     self.times.append(sample_time)
     self.positions.append(self.data.site_xpos[self.site_id].copy())
+
+    # Vận tốc site trong hệ world
+    site_velocity_6d = np.zeros(6, dtype=float)
+    mujoco.mj_objectVelocity(
+      self.model,
+      self.data,
+      mujoco.mjtObj.mjOBJ_SITE,
+      self.site_id,
+      site_velocity_6d,
+      0,  # 0: biểu diễn trong hệ world
+    )
+    # Ba phần tử đầu là vận tốc góc,
+    # ba phần tử sau là vận tốc tuyến tính
+    self.velocities.append(site_velocity_6d[3:6].copy())
+
+    # Quaternion quay từ frame IMU sang world [w, x, y, z]
+    site_quaternion = np.empty(4, dtype=float)
+    mujoco.mju_mat2Quat(
+        site_quaternion,
+        self.data.site_xmat[self.site_id],
+    )
+    # Tránh quaternion bị đổi dấu khi vẽ:
+    # q và -q biểu diễn cùng một phép quay
+    if (
+        self.quaternions
+        and np.dot(site_quaternion, self.quaternions[-1]) < 0.0
+    ):
+      site_quaternion *= -1.0
+    self.quaternions.append(site_quaternion.copy())
+
+    # Lưu trạng thái danh định sau bước dự đoán ESEKF
+    predicted_position = np.asarray(
+        predicted_position, dtype=float
+    ).reshape(3)
+
+    predicted_velocity = np.asarray(
+        predicted_velocity, dtype=float
+    ).reshape(3)
+
+    predicted_quaternion = np.asarray(
+        predicted_quaternion, dtype=float
+    ).reshape(4)
+
+    # Chuẩn hóa quaternion dự đoán
+    quaternion_norm = np.linalg.norm(predicted_quaternion)
+    if quaternion_norm > 0.0:
+      predicted_quaternion = predicted_quaternion / quaternion_norm
+
+    # Tránh quaternion dự đoán bị đổi dấu trên đồ thị
+    if (
+        self.predicted_quaternions
+        and np.dot(
+            predicted_quaternion,
+            self.predicted_quaternions[-1],
+        ) < 0.0
+    ):
+      predicted_quaternion *= -1.0
+
+    self.predicted_positions.append(predicted_position.copy())
+    self.predicted_velocities.append(predicted_velocity.copy())
+    self.predicted_quaternions.append(predicted_quaternion.copy())
+
     self.last_sample_time = sample_time
 
     if sample_time - self.last_plot_time < self.plot_period:
@@ -99,6 +260,11 @@ class SiteTrajectoryVisualizer:
     """Clear all collected samples, for example after resetting the robot."""
     self.times.clear()
     self.positions.clear()
+    self.velocities.clear()
+    self.quaternions.clear()
+    self.predicted_positions.clear()
+    self.predicted_velocities.clear()
+    self.predicted_quaternions.clear()
     self.last_plot_time = -np.inf
     self.last_sample_time = None
 
@@ -113,23 +279,84 @@ class SiteTrajectoryVisualizer:
 
     times = np.asarray(self.times, dtype=float)
     positions = np.asarray(self.positions, dtype=float)
+    velocities = np.asarray(self.velocities, dtype=float)
+    quaternions = np.asarray(self.quaternions, dtype=float)
+    predicted_positions = np.asarray(self.predicted_positions, dtype=float)
+    predicted_velocities = np.asarray(self.predicted_velocities, dtype=float)
+    predicted_quaternions = np.asarray(self.predicted_quaternions, dtype=float)
     x, y, z = positions.T
+    predicted_x, predicted_y, predicted_z = predicted_positions.T
 
     self.path_line.set_data_3d(x, y, z)
+    self.predicted_path_line.set_data_3d(predicted_x, predicted_y, predicted_z,)
     self.current_point.set_data_3d([x[-1]], [y[-1]], [z[-1]])
-    self._set_3d_limits(positions)
+    all_positions = np.vstack((positions, predicted_positions))
+    self._set_3d_limits(all_positions)
 
     for axis_index, line in enumerate(self.coordinate_lines):
       line.set_data(times, positions[:, axis_index])
 
+    for axis_index, line in enumerate(
+        self.predicted_coordinate_lines
+    ):
+      line.set_data(
+          times,
+          predicted_positions[:, axis_index],
+      )
+
+    for axis_index, line in enumerate(self.velocity_lines):
+      line.set_data(times, velocities[:, axis_index])
+
+    for axis_index, line in enumerate(
+        self.predicted_velocity_lines
+    ):
+      line.set_data(
+          times,
+          predicted_velocities[:, axis_index],
+      )
+
+    for component_index, line in enumerate(self.quaternion_lines):
+      line.set_data(times, quaternions[:, component_index])
+
+    for component_index, line in enumerate(
+        self.predicted_quaternion_lines
+    ):
+      line.set_data(
+          times,
+          predicted_quaternions[:, component_index],
+      )
+
     time_padding = max(0.1, 0.02 * max(times[-1] - times[0], 1.0))
     self.ax_time.set_xlim(times[0] - time_padding, times[-1] + time_padding)
 
-    position_min = float(np.min(positions))
-    position_max = float(np.max(positions))
+    self.ax_velocity.set_xlim(
+        times[0] - time_padding,
+        times[-1] + time_padding,
+    )
+
+    self.ax_quaternion.set_xlim(
+        times[0] - time_padding,
+        times[-1] + time_padding,
+    )
+
+    position_values = np.vstack((positions, predicted_positions))
+    position_min = float(np.min(position_values))
+    position_max = float(np.max(position_values))
     position_padding = max(0.05, 0.05 * (position_max - position_min))
     self.ax_time.set_ylim(
       position_min - position_padding, position_max + position_padding
+    )
+
+    velocity_values = np.vstack((velocities, predicted_velocities))
+    velocity_min = float(np.min(velocity_values))
+    velocity_max = float(np.max(velocity_values))
+    velocity_padding = max(
+        0.05,
+        0.05 * (velocity_max - velocity_min),
+    )
+    self.ax_velocity.set_ylim(
+        velocity_min - velocity_padding,
+        velocity_max + velocity_padding,
     )
 
     self.figure.canvas.draw_idle()

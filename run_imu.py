@@ -7,6 +7,7 @@ import run
 from imu_data_reader import IMUDataReader
 from trajectory_visualizer import SiteTrajectoryVisualizer
 from imu_data_visualizer import IMUDataVisualizer
+from esekf import ESEKF
 
 
 class IMUG1Controller(run.G1Controller):
@@ -15,9 +16,15 @@ class IMUG1Controller(run.G1Controller):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
-    self.lin_vel_x = 0.6
+    self.lin_vel_x = 0.0
     self.lin_vel_y = 0.0
     self.ang_vel_z = 0.0
+
+    self.esekf = ESEKF(
+      self.model,
+      self.data,
+      site_name="imu_right_foot",
+    )
 
     self.imu_trajectory = SiteTrajectoryVisualizer(
       self.model,
@@ -39,15 +46,32 @@ class IMUG1Controller(run.G1Controller):
   def step(self):
     target_pos = super().step()
 
+    self.esekf.initialize_once()
+
     acceleration, angular_velocity = self.imu_reader.update()
+
+    self.esekf.predict(
+      acceleration=acceleration,
+      angular_velocity=angular_velocity,
+    )
+
+    # Lấy trạng thái danh định ngay sau bước dự đoán
+    predicted_position = self.esekf.position.copy()
+    predicted_velocity = self.esekf.velocity.copy()
+    predicted_quaternion = self.esekf.quaternion.copy()
 
     self.imu_visualizer.update(
       sample_time=self.data.time,
       acceleration=acceleration,
       angular_velocity=angular_velocity,
     )
+
+    self.imu_trajectory.update(
+      predicted_position,
+      predicted_velocity,
+      predicted_quaternion,
+    )
     
-    self.imu_trajectory.update()
     return target_pos
 
 
