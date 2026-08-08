@@ -31,6 +31,13 @@ class IMUDataReader:
     self.last_print_time = -np.inf
     self.last_sample_time: float | None = None
 
+    # VN-100 noise tại tần số lấy mẫu 200 Hz
+    self.acc_noise_std = 0.0194162       # m/s^2
+    self.gyro_noise_std = 0.0008639      # rad/s
+
+    # Bộ sinh số ngẫu nhiên
+    self.rng = np.random.default_rng(42)
+
     self._validate_sensor(accelerometer_name)
     self._validate_sensor(gyroscope_name)
 
@@ -52,6 +59,19 @@ class IMUDataReader:
     acceleration = self.data.sensor(self.accelerometer_name).data.copy()
     angular_velocity = self.data.sensor(self.gyroscope_name).data.copy()
 
+    # Cộng nhiễu trắng theo thông số VN-100
+    acceleration += self.rng.normal(
+        loc=0.0,
+        scale=self.acc_noise_std,
+        size=3,
+    )
+
+    angular_velocity += self.rng.normal(
+        loc=0.0,
+        scale=self.gyro_noise_std,
+        size=3,
+    )
+
     self.latest_acceleration = acceleration
     self.latest_angular_velocity = angular_velocity
     self.times.append(sample_time)
@@ -61,7 +81,7 @@ class IMUDataReader:
 
     if sample_time - self.last_print_time >= self.print_period:
       self.last_print_time = sample_time
-      self._print_latest(sample_time, acceleration, angular_velocity)
+    #   self._print_latest(sample_time, acceleration, angular_velocity)
 
     return acceleration.copy(), angular_velocity.copy()
 

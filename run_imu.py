@@ -6,6 +6,7 @@ import sys
 import run
 from imu_data_reader import IMUDataReader
 from trajectory_visualizer import SiteTrajectoryVisualizer
+from imu_data_visualizer import IMUDataVisualizer
 
 
 class IMUG1Controller(run.G1Controller):
@@ -31,10 +32,21 @@ class IMUG1Controller(run.G1Controller):
       gyroscope_name="imu_right_gyro",
       print_hz=5.0,
     )
+    self.imu_visualizer = IMUDataVisualizer(
+      plot_fps=10.0,
+    )
 
   def step(self):
     target_pos = super().step()
-    self.imu_reader.update()
+
+    acceleration, angular_velocity = self.imu_reader.update()
+
+    self.imu_visualizer.update(
+      sample_time=self.data.time,
+      acceleration=acceleration,
+      angular_velocity=angular_velocity,
+    )
+    
     self.imu_trajectory.update()
     return target_pos
 
