@@ -39,7 +39,7 @@ class SiteTrajectoryVisualizer:
 
     plt.ion()
     self.figure = plt.figure(
-      "IMU site trajectory", figsize=(12, 5), constrained_layout=True
+      "IMU site trajectory", figsize=(14, 7), constrained_layout=True
     )
     self.ax_3d = self.figure.add_subplot(1, 2, 1, projection="3d")
     self.ax_time = self.figure.add_subplot(1, 2, 2)
