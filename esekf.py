@@ -209,6 +209,18 @@ class ESEKF:
     print(f"Vi tri p_hat [m]          = {self.position}")
     print(f"Van toc v_hat [m/s]       = {self.velocity}")
     print(f"Quaternion q_hat [w,x,y,z] = {self.quaternion}")
+
+    # Kiểm tra covariance P
+    P_diag = np.diag(self.P)
+    P_std = np.sqrt(np.maximum(P_diag, 0.0))
+    symmetry_error = np.max(np.abs(self.P - self.P.T))
+    min_eigenvalue = np.min(np.linalg.eigvalsh(self.P))
+    print(f"P diag                      = {P_diag}")
+    print(f"Std position [m]            = {P_std[0:3]}")
+    print(f"Std velocity [m/s]          = {P_std[3:6]}")
+    print(f"Std attitude [rad]          = {P_std[6:9]}")
+    print(f"P symmetry error            = {symmetry_error:.3e}")
+    print(f"Min eigenvalue of P         = {min_eigenvalue:.3e}")
     print("================================================")
 
   
