@@ -143,6 +143,14 @@ class ESEKF:
     )
     self.Fi = Fi
 
+    # Dự đoán ma trận hiệp phương sai
+    self.P = (
+        self.Fx @ self.P @ self.Fx.T
+        + self.Fi @ self.Q @ self.Fi.T
+    )
+    # Giữ P đối xứng do sai số số học
+    self.P = 0.5 * (self.P + self.P.T)
+
     # a^w_k = R(q_k-1) a_k + g
     acceleration_world = (
         rotated_acceleration
