@@ -26,6 +26,8 @@ class IMUG1Controller(run.G1Controller):
       site_name="imu_right_foot",
     )
 
+    self.esekf.delta_t = float(self.model.opt.timestep)
+
     self.imu_trajectory = SiteTrajectoryVisualizer(
       self.model,
       self.data,
@@ -43,9 +45,13 @@ class IMUG1Controller(run.G1Controller):
       plot_fps=10.0,
     )
 
+
   def step(self):
     target_pos = super().step()
+    return target_pos
 
+
+  def step_esekf(self) -> None:
     self.esekf.initialize_once()
 
     acceleration, angular_velocity = self.imu_reader.update()
@@ -71,8 +77,6 @@ class IMUG1Controller(run.G1Controller):
       predicted_velocity,
       predicted_quaternion,
     )
-    
-    return target_pos
 
 
 if __name__ == "__main__":

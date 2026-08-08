@@ -28,7 +28,7 @@ class ESEKF:
     # Initial nominal state x0_hat = [p, v, q], with q = [w, x, y, z].
     # The ESEKF origin is chosen at the initial IMU position; therefore p0 = 0.
     self.x0_hat = np.array([
-      0.0, 0.0, 0.0,       # p0 [m]
+      0.0, 0.0, 0.05,       # p0 [m]
       0.0, 0.0, 0.0,       # v0 [m/s]
       1.0, 0.0, 0.0, 0.0,  # q0: IMU -> world [w, x, y, z]
     ], dtype=float)

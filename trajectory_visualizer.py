@@ -77,7 +77,7 @@ class SiteTrajectoryVisualizer:
     self.predicted_coordinate_lines = [
         self.ax_time.plot(
             [], [],
-            label=f"{axis} dự đoán",
+            label=f"{axis}",
             color=color,
             linestyle="--",
             linewidth=1.2,
@@ -103,7 +103,7 @@ class SiteTrajectoryVisualizer:
     self.predicted_velocity_lines = [
         self.ax_velocity.plot(
             [], [],
-            label=f"{axis} dự đoán",
+            label=f"{axis}",
             color=color,
             linestyle="--",
             linewidth=1.2,
@@ -129,7 +129,7 @@ class SiteTrajectoryVisualizer:
     self.predicted_quaternion_lines = [
         self.ax_quaternion.plot(
             [], [],
-            label=f"{component} dự đoán",
+            label=f"{component}",
             color=color,
             linestyle="--",
             linewidth=1.2,

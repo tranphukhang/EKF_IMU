@@ -699,6 +699,10 @@ def main():
           target_pos = ctrl.step()
         ctrl.apply_pd_control(target_pos)
         mujoco.mj_step(model, data)
+
+        if hasattr(ctrl, "step_esekf"):
+          ctrl.step_esekf()
+
         control_step += 1
         sim_time += model.opt.timestep
 
