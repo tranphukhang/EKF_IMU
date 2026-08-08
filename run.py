@@ -43,6 +43,8 @@ import mujoco
 import numpy as np
 import onnxruntime as ort
 
+import time
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
@@ -630,8 +632,40 @@ def main():
   print("Launching MuJoCo viewer...")
 
   with viewer.launch_passive(model, data, key_callback=on_key) as v:
+
+    tracking_cam_id = mujoco.mj_name2id(
+      model,
+      mujoco.mjtObj.mjOBJ_CAMERA,
+      "tracking"
+    )
+    with v.lock():
+      v.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+      v.cam.fixedcamid = tracking_cam_id
+
     # Reset clock AFTER viewer opens — prevents catchup lag burst on startup
     t0 = time.time()
+
+    viewer_interval = 1.0 / 60.0
+    last_viewer_sync = time.perf_counter()
+
+    mujoco.mj_forward(model, data)
+    site_id = mujoco.mj_name2id(
+      model,
+      mujoco.mjtObj.mjOBJ_SITE,
+      "imu_right_foot"
+    )
+    root_joint_id = mujoco.mj_name2id(
+      model,
+      mujoco.mjtObj.mjOBJ_JOINT,
+      "floating_base_joint"
+    )
+    root_qpos_adr = model.jnt_qposadr[root_joint_id]
+    site_world_pos = data.site_xpos[site_id].copy()
+    data.qpos[root_qpos_adr]     -= site_world_pos[0]
+    data.qpos[root_qpos_adr + 1] -= site_world_pos[1]
+    mujoco.mj_forward(model, data)
+    print("Vị trí site sau hiệu chỉnh:", data.site_xpos[site_id])
+
     while v.is_running():
       # Handle spacebar reset
       if state["reset"]:
@@ -668,8 +702,14 @@ def main():
         control_step += 1
         sim_time += model.opt.timestep
 
+      now = time.perf_counter()
+      if now - last_viewer_sync >= viewer_interval:
+          v.sync()
+          last_viewer_sync = now
+      time.sleep(0.001)
+
       # Sync viewer
-      v.sync()
+      # v.sync()
 
       # Render camera views at lower FPS
       if cam_renderer and cv2 and (show_head_cam or show_wrist_cam):
