@@ -26,7 +26,7 @@ class ESEKF:
       raise ValueError(f"Khong tim thay site MuJoCo: {site_name!r}")
 
     # Initial nominal state x0_hat = [p, v, q], with q = [w, x, y, z].
-    # The ESEKF origin is chosen at the initial IMU position; therefore p0 = 0.
+    # The ESEKF origin is chosen at the initial IMU position; therefore p0 = [0, 0, 0.05].
     self.x0_hat = np.array([
       0.0, 0.0, 0.05,       # p0 [m]
       0.0, 0.0, 0.0,       # v0 [m/s]
@@ -130,6 +130,18 @@ class ESEKF:
         * self.delta_t
     )
     self.Fx = Fx
+
+    # Jacobian nhiễu quá trình F_i,k
+    Fi = np.zeros((9, 6), dtype=float)
+    Fi[3:6, 0:3] = (
+        -rotation_imu_to_world
+        * self.delta_t
+    )
+    Fi[6:9, 3:6] = (
+        -rotation_imu_to_world
+        * self.delta_t
+    )
+    self.Fi = Fi
 
     # a^w_k = R(q_k-1) a_k + g
     acceleration_world = (
