@@ -101,6 +101,55 @@ class ESEKF:
           [-y,   x,   0.0],
       ])
 
+  @staticmethod
+  def _global_attitude_error(
+        q_true: np.ndarray,
+        q_est: np.ndarray,
+    ) -> np.ndarray:
+        """Rotation-vector error với global/left angular error."""
+
+        q_true = np.asarray(q_true, dtype=float).copy()
+        q_est = np.asarray(q_est, dtype=float).copy()
+
+        mujoco.mju_normalize4(q_true)
+        mujoco.mju_normalize4(q_est)
+
+        # q_est^{-1} = conjugate(q_est)
+        q_est_inv = q_est.copy()
+        q_est_inv[1:4] *= -1.0
+
+        # Global error:
+        # delta_q = q_true ⊗ q_est^{-1}
+        delta_q = np.empty(4, dtype=float)
+
+        mujoco.mju_mulQuat(
+            delta_q,
+            q_true,
+            q_est_inv,
+        )
+
+        mujoco.mju_normalize4(delta_q)
+
+        # q và -q biểu diễn cùng một rotation.
+        # Chọn representation có góc nhỏ nhất.
+        if delta_q[0] < 0.0:
+            delta_q *= -1.0
+
+        vector_part = delta_q[1:4]
+        sin_half_angle = np.linalg.norm(vector_part)
+
+        if sin_half_angle < 1e-12:
+            return 2.0 * vector_part
+
+        angle = 2.0 * np.arctan2(
+            sin_half_angle,
+            delta_q[0],
+        )
+
+        axis = vector_part / sin_half_angle
+
+        return angle * axis
+
   def predict(
         self,
         acceleration: np.ndarray,
@@ -195,13 +244,32 @@ class ESEKF:
     self.velocity[:] = velocity_new
     self.quaternion[:] = quaternion_new
 
-    self._print_prediction()
+    # self._print_prediction()
 
     return self.x_hat.copy()
     
 
   def correct_zupt(self) -> np.ndarray:
     """Bước hiệu chỉnh ZUPT."""
+
+    ######
+    # Quaternion ground truth IMU -> world tại thời điểm hiện tại
+    q_true = np.empty(4, dtype=float)
+
+    mujoco.mju_mat2Quat(
+        q_true,
+        self.data.site_xmat[self.site_id],
+    )
+
+    # Quaternion estimate trước ZUPT correction
+    q_est_before = self.quaternion.copy()
+
+    # Attitude error thật trước correction
+    attitude_error_before = self._global_attitude_error(
+        q_true,
+        q_est_before,
+    )
+    #######
 
     # Phép đo giả ZUPT: vận tốc chân bằng 0
     z = np.zeros(3, dtype=float)
@@ -272,6 +340,30 @@ class ESEKF:
     mujoco.mju_normalize4(quaternion_corrected)
     self.quaternion[:] = quaternion_corrected
 
+    #####
+    # Attitude error thật sau ZUPT correction
+    attitude_error_after = self._global_attitude_error(
+        q_true,
+        self.quaternion,
+    )
+    # Giá trị attitude error dự kiến sau injection
+    # theo xấp xỉ góc nhỏ của global error
+    expected_error_after = (
+        attitude_error_before - delta_theta
+    )
+
+    # Sai lệch giữa quaternion injection thực tế
+    # và quan hệ tuyến tính dự kiến
+    injection_check_error = (
+        attitude_error_after
+        - expected_error_after
+    )
+    alignment = np.dot(
+        attitude_error_before,
+        delta_theta,
+    )
+    #####
+
     # Cập nhật covariance sau ZUPT
     I_KH = np.eye(9, dtype=float) - K @ H
     P_corrected = I_KH @ self.P @ I_KH.T + K @ R @ K.T
@@ -288,6 +380,42 @@ class ESEKF:
     G_reset[6:9, 6:9] = G_theta
     self.P = (G_reset @ self.P @ G_reset.T)
     self.P = 0.5 * (self.P + self.P.T)
+
+
+    print("\n===== ATTITUDE INJECTION CHECK =====")
+
+    print(
+        "true error before =",
+        attitude_error_before,
+    )
+
+    print(
+        "delta_theta EKF   =",
+        delta_theta,
+    )
+
+    print(
+        "expected after    =",
+        expected_error_after,
+    )
+
+    print(
+        "actual after      =",
+        attitude_error_after,
+    )
+
+    print(
+        "injection check error =",
+        injection_check_error,
+    )
+
+    print(
+        "alignment =",
+        alignment,
+    )
+
+    print("====================================\n")
+
 
     return r.copy()
 

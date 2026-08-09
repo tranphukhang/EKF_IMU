@@ -39,7 +39,7 @@ class SiteTrajectoryVisualizer:
     self.velocities: deque[np.ndarray] = deque(maxlen=max_points)
     self.quaternions: deque[np.ndarray] = deque(maxlen=max_points)
 
-    # Trạng thái danh định sau bước dự đoán ESEKF
+    # Trạng thái danh định sau chu kỳ predict/correction ESEKF
     self.estimated_positions: deque[np.ndarray] = deque(maxlen=max_points)
     self.estimated_velocities: deque[np.ndarray] = deque(maxlen=max_points)
     self.estimated_quaternions: deque[np.ndarray] = deque(maxlen=max_points)
@@ -83,7 +83,7 @@ class SiteTrajectoryVisualizer:
             linewidth=1.2,
         )[0]
         for axis, color in zip(
-            ("x-", "y-", "z-"),
+            ("x+", "y+", "z+"),
             ("red", "green", "blue"),
         )
     ]
@@ -109,7 +109,7 @@ class SiteTrajectoryVisualizer:
             linewidth=1.2,
         )[0]
         for axis, color in zip(
-            ("vx-", "vy-", "vz-"),
+            ("vx+", "vy+", "vz+"),
             ("red", "green", "blue"),
         )
     ]
@@ -135,7 +135,7 @@ class SiteTrajectoryVisualizer:
             linewidth=1.2,
         )[0]
         for component, color in zip(
-            ("qw-", "qx-", "qy-", "qz-"),
+            ("qw-", "qx+", "qy+", "qz+"),
             ("black", "red", "green", "blue"),
         )
     ]
@@ -216,7 +216,7 @@ class SiteTrajectoryVisualizer:
       site_quaternion *= -1.0
     self.quaternions.append(site_quaternion.copy())
 
-    # Lưu trạng thái danh định sau bước dự đoán ESEKF
+    # Lưu trạng thái danh định sau chu kỳ predict/correction ESEKF
     estimated_position = np.asarray(
         estimated_position, dtype=float
     ).reshape(3)
