@@ -41,7 +41,7 @@ class ESEKF:
     self.quaternion = self.x_hat[6:10]
 
     # Độ lệch chuẩn ban đầu của trạng thái sai số
-    sigma_p = np.array([0.001, 0.001, 0.001])       # [m]
+    sigma_p = np.array([0.01, 0.01, 0.01])       # [m]
     sigma_v = np.array([0.01, 0.01, 0.01])          # [m/s]
     sigma_theta = np.deg2rad([1.0, 1.0, 1.0])       # roll, pitch, yaw [rad]
 

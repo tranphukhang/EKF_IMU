@@ -3,6 +3,9 @@
 
 import sys
 
+import mujoco
+import numpy as np
+
 import run
 from imu_data_reader import IMUDataReader
 from trajectory_visualizer import SiteTrajectoryVisualizer
@@ -76,6 +79,46 @@ class IMUG1Controller(run.G1Controller):
     # TEST: cho robot settle 0.25 s trước khi chạy ESEKF
     if self.data.time < 0.25:
         return
+
+    # Kiểm tra attitude thật tại thời điểm ESEKF bắt đầu
+    if not self.esekf.initialized:
+
+        q_true = np.empty(4, dtype=float)
+
+        mujoco.mju_mat2Quat(
+            q_true,
+            self.data.site_xmat[self.esekf.site_id],
+        )
+
+        q_est_initial = self.esekf.quaternion.copy()
+
+        # q và -q biểu diễn cùng một orientation
+        dot_q = np.clip(
+            abs(np.dot(q_true, q_est_initial)),
+            -1.0,
+            1.0,
+        )
+
+        angle_error = 2.0 * np.arccos(dot_q)
+
+        print("\n===== ESEKF INITIAL ATTITUDE CHECK =====")
+        print(
+            f"time              = {self.data.time:.3f} s"
+        )
+        print(
+            "q_true IMU->world  =",
+            q_true,
+        )
+        print(
+            "q_ESEKF initial    =",
+            q_est_initial,
+        )
+        print(
+            "attitude error     =",
+            np.rad2deg(angle_error),
+            "deg",
+        )
+        print("========================================\n")
 
     # Chỉ khởi tạo ESEKF sau khi robot đã settle
     self.esekf.initialize_once()
