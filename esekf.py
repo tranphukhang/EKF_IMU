@@ -43,7 +43,7 @@ class ESEKF:
     # Độ lệch chuẩn ban đầu của trạng thái sai số
     sigma_p = np.array([0.001, 0.001, 0.001])       # [m]
     sigma_v = np.array([0.01, 0.01, 0.01])          # [m/s]
-    sigma_theta = np.deg2rad([1.0, 1.0, 5.0])       # roll, pitch, yaw [rad]
+    sigma_theta = np.deg2rad([1.0, 1.0, 1.0])       # roll, pitch, yaw [rad]
 
     self.P0 = np.diag(
         np.concatenate([
@@ -223,30 +223,15 @@ class ESEKF:
 
     # Kalman gain
     PHt = self.P @ H.T
-    # K = np.linalg.solve(
-    #     S,
-    #     PHt.T,
-    # ).T
-    # self.K_zupt = K.copy()
-
-    # # Ước lượng trạng thái sai số hiệu chỉnh
-    # # delta_x = K r
-    # delta_x = K @ r
-
-    #####
     K = np.linalg.solve(
         S,
         PHt.T,
     ).T
     self.K_zupt = K.copy()
 
-    # Diagnostic test:
-    # không cho ZUPT hiệu chỉnh global heading
-    K_used = K.copy()
-    K_used[8, :] = 0.0
-
-    delta_x = K_used @ r
-    #####
+    # Ước lượng trạng thái sai số hiệu chỉnh
+    # delta_x = K r
+    delta_x = K @ r
 
     # Kiểm tra delta_x
     assert delta_x.shape == (9,)
@@ -289,18 +274,8 @@ class ESEKF:
     self.quaternion[:] = quaternion_corrected
 
     # Cập nhật covariance sau ZUPT
-    # I_KH = np.eye(9, dtype=float) - K @ H
-    # P_corrected = I_KH @ self.P @ I_KH.T + K @ R @ K.T
-
-    #####
-    # Cập nhật covariance sau ZUPT
-    I_KH = np.eye(9, dtype=float) - K_used @ H
-
-    P_corrected = (
-        I_KH @ self.P @ I_KH.T
-        + K_used @ R @ K_used.T
-    )
-    #####
+    I_KH = np.eye(9, dtype=float) - K @ H
+    P_corrected = I_KH @ self.P @ I_KH.T + K @ R @ K.T
 
     # Giữ P đối xứng do sai số số học
     P_corrected = 0.5 * (P_corrected + P_corrected.T)

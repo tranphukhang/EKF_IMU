@@ -17,7 +17,7 @@ class IMUG1Controller(run.G1Controller):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
-    self.lin_vel_x = 0.6
+    self.lin_vel_x = 0.0
     self.lin_vel_y = 0.0
     self.ang_vel_z = 0.0
 
@@ -62,34 +62,45 @@ class IMUG1Controller(run.G1Controller):
 
 
   def step_esekf(self) -> None:
-    self.esekf.initialize_once()
 
+    # Luôn đọc IMU để vẫn quan sát được transient ban đầu
     acceleration, angular_velocity = self.imu_reader.update()
 
-    self.esekf.predict(
-      acceleration=acceleration,
-      angular_velocity=angular_velocity,
+    # Luôn plot raw IMU
+    self.imu_visualizer.update(
+        sample_time=self.data.time,
+        acceleration=acceleration,
+        angular_velocity=angular_velocity,
     )
 
+    # TEST: cho robot settle 0.25 s trước khi chạy ESEKF
+    if self.data.time < 0.25:
+        return
+
+    # Chỉ khởi tạo ESEKF sau khi robot đã settle
+    self.esekf.initialize_once()
+
+    # Prediction
+    self.esekf.predict(
+        acceleration=acceleration,
+        angular_velocity=angular_velocity,
+    )
+
+    # ZUPT correction
     zupt_active = self.zupt_trigger.check()
     if zupt_active:
-      self.esekf.correct_zupt()
+        self.esekf.correct_zupt()
 
-    # Lấy trạng thái danh định sau chu kỳ predict/correction
+    # Lấy trạng thái danh định sau predict/correction
     estimated_position = self.esekf.position.copy()
     estimated_velocity = self.esekf.velocity.copy()
     estimated_quaternion = self.esekf.quaternion.copy()
 
-    self.imu_visualizer.update(
-      sample_time=self.data.time,
-      acceleration=acceleration,
-      angular_velocity=angular_velocity,
-    )
-
+    # Plot trajectory ESEKF
     self.imu_trajectory.update(
-      estimated_position,
-      estimated_velocity,
-      estimated_quaternion,
+        estimated_position,
+        estimated_velocity,
+        estimated_quaternion,
     )
 
 
