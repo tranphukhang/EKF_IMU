@@ -8,7 +8,7 @@ class ZUPTTrigger:
         model,
         data,
         site_name="imu_right_foot",
-        velocity_threshold=0.1,
+        velocity_threshold=0.02,
         print_hz=5.0,
     ):
         
@@ -95,4 +95,4 @@ class ZUPTTrigger:
             )
             self.last_print_time = current_time
 
-        return False
+        return zupt_candidate
