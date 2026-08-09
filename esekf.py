@@ -101,55 +101,6 @@ class ESEKF:
           [-y,   x,   0.0],
       ])
 
-  @staticmethod
-  def _global_attitude_error(
-        q_true: np.ndarray,
-        q_est: np.ndarray,
-    ) -> np.ndarray:
-        """Rotation-vector error với global/left angular error."""
-
-        q_true = np.asarray(q_true, dtype=float).copy()
-        q_est = np.asarray(q_est, dtype=float).copy()
-
-        mujoco.mju_normalize4(q_true)
-        mujoco.mju_normalize4(q_est)
-
-        # q_est^{-1} = conjugate(q_est)
-        q_est_inv = q_est.copy()
-        q_est_inv[1:4] *= -1.0
-
-        # Global error:
-        # delta_q = q_true ⊗ q_est^{-1}
-        delta_q = np.empty(4, dtype=float)
-
-        mujoco.mju_mulQuat(
-            delta_q,
-            q_true,
-            q_est_inv,
-        )
-
-        mujoco.mju_normalize4(delta_q)
-
-        # q và -q biểu diễn cùng một rotation.
-        # Chọn representation có góc nhỏ nhất.
-        if delta_q[0] < 0.0:
-            delta_q *= -1.0
-
-        vector_part = delta_q[1:4]
-        sin_half_angle = np.linalg.norm(vector_part)
-
-        if sin_half_angle < 1e-12:
-            return 2.0 * vector_part
-
-        angle = 2.0 * np.arctan2(
-            sin_half_angle,
-            delta_q[0],
-        )
-
-        axis = vector_part / sin_half_angle
-
-        return angle * axis
-
   def predict(
         self,
         acceleration: np.ndarray,
@@ -252,46 +203,11 @@ class ESEKF:
   def correct_zupt(self) -> np.ndarray:
     """Bước hiệu chỉnh ZUPT."""
 
-    ######
-    # Quaternion ground truth IMU -> world tại thời điểm hiện tại
-    q_true = np.empty(4, dtype=float)
-
-    mujoco.mju_mat2Quat(
-        q_true,
-        self.data.site_xmat[self.site_id],
-    )
-
-    # Quaternion estimate trước ZUPT correction
-    q_est_before = self.quaternion.copy()
-
-    # Attitude error thật trước correction
-    attitude_error_before = self._global_attitude_error(
-        q_true,
-        q_est_before,
-    )
-    #######
-
     # Phép đo giả ZUPT: vận tốc chân bằng 0
     z = np.zeros(3, dtype=float)
 
     # h(x_hat) = v_hat
     predicted_measurement = self.velocity.copy()
-
-    ######
-    # Ground-truth velocity của IMU site trong world
-    site_velocity_6d = np.zeros(6, dtype=float)
-
-    mujoco.mj_objectVelocity(
-        self.model,
-        self.data,
-        mujoco.mjtObj.mjOBJ_SITE,
-        self.site_id,
-        site_velocity_6d,
-        0,
-    )
-
-    v_true = site_velocity_6d[3:6].copy()
-    ######
 
     # Residual / innovation:
     # r = z - h(x_hat)
@@ -307,15 +223,31 @@ class ESEKF:
 
     # Kalman gain
     PHt = self.P @ H.T
+    # K = np.linalg.solve(
+    #     S,
+    #     PHt.T,
+    # ).T
+    # self.K_zupt = K.copy()
+
+    # # Ước lượng trạng thái sai số hiệu chỉnh
+    # # delta_x = K r
+    # delta_x = K @ r
+
+    #####
     K = np.linalg.solve(
         S,
         PHt.T,
     ).T
     self.K_zupt = K.copy()
 
-    # Ước lượng trạng thái sai số hiệu chỉnh
-    # delta_x = K r
-    delta_x = K @ r
+    # Diagnostic test:
+    # không cho ZUPT hiệu chỉnh global heading
+    K_used = K.copy()
+    K_used[8, :] = 0.0
+
+    delta_x = K_used @ r
+    #####
+
     # Kiểm tra delta_x
     assert delta_x.shape == (9,)
     assert np.all(np.isfinite(delta_x))
@@ -323,35 +255,6 @@ class ESEKF:
     delta_p = delta_x[0:3]
     delta_v = delta_x[3:6]
     delta_theta = delta_x[6:9]
-
-    ######
-    # Velocity error thật
-    delta_v_true = (
-        v_true - predicted_measurement
-    )
-
-    # Phần Kalman gain ánh xạ velocity residual -> attitude error
-    K_theta = K[6:9, :]
-
-    # Correction attitude mà filter hiện đang dùng
-    delta_theta_from_r = K_theta @ r
-
-    # Chỉ để debug:
-    # Nếu innovation đúng bằng velocity error thật thì attitude correction sẽ là gì?
-    delta_theta_from_true_dv = (
-        K_theta @ delta_v_true
-    )
-
-    alignment_r = np.dot(
-        attitude_error_before,
-        delta_theta_from_r,
-    )
-
-    alignment_true_dv = np.dot(
-        attitude_error_before,
-        delta_theta_from_true_dv,
-    )
-    ######
 
     # Inject position và velocity error vào nominal state
     self.position[:] += delta_p
@@ -385,30 +288,6 @@ class ESEKF:
     mujoco.mju_normalize4(quaternion_corrected)
     self.quaternion[:] = quaternion_corrected
 
-    #####
-    # Attitude error thật sau ZUPT correction
-    attitude_error_after = self._global_attitude_error(
-        q_true,
-        self.quaternion,
-    )
-    # Giá trị attitude error dự kiến sau injection
-    # theo xấp xỉ góc nhỏ của global error
-    expected_error_after = (
-        attitude_error_before - delta_theta
-    )
-
-    # Sai lệch giữa quaternion injection thực tế
-    # và quan hệ tuyến tính dự kiến
-    injection_check_error = (
-        attitude_error_after
-        - expected_error_after
-    )
-    alignment = np.dot(
-        attitude_error_before,
-        delta_theta,
-    )
-    #####
-
     # Cập nhật covariance sau ZUPT
     I_KH = np.eye(9, dtype=float) - K @ H
     P_corrected = I_KH @ self.P @ I_KH.T + K @ R @ K.T
@@ -425,45 +304,6 @@ class ESEKF:
     G_reset[6:9, 6:9] = G_theta
     self.P = (G_reset @ self.P @ G_reset.T)
     self.P = 0.5 * (self.P + self.P.T)
-
-
-    print("\n===== ZUPT K_THETA CHECK =====")
-
-    print("v_true          =", v_true)
-    print("v_hat           =", predicted_measurement)
-    print("r = -v_hat      =", r)
-    print("delta_v_true    =", delta_v_true)
-
-    print(
-        "r - delta_v_true =",
-        r - delta_v_true,
-    )
-
-    print("K_theta =")
-    print(K_theta)
-
-    print(
-        "delta_theta from r       =",
-        delta_theta_from_r,
-    )
-
-    print(
-        "delta_theta from true dv =",
-        delta_theta_from_true_dv,
-    )
-
-    print(
-        "alignment using r       =",
-        alignment_r,
-    )
-
-    print(
-        "alignment using true dv =",
-        alignment_true_dv,
-    )
-
-    print("=============================\n")
-
 
     return r.copy()
 
@@ -538,39 +378,3 @@ class ESEKF:
 
     print(f"Delta t = {self.delta_t:.4f} s")
     print("=================================\n")
-
-  def _print_zupt_debug(
-        self,
-        H: np.ndarray,
-        R: np.ndarray,
-        S: np.ndarray,
-        K: np.ndarray,
-    ) -> None:
-
-    print("\n========== ZUPT DEBUG ==========")
-
-    print("H shape =", H.shape)
-    print(H)
-
-    print("\nR shape =", R.shape)
-    print(R)
-
-    print("\nS shape =", S.shape)
-    print(S)
-
-    print("\nK shape =", K.shape)
-    print(K)
-
-    print("\nResidual r =", self.zupt_residual)
-
-    print(
-        "S symmetry error =",
-        np.max(np.abs(S - S.T))
-    )
-
-    print(
-        "Min eigenvalue of S =",
-        np.min(np.linalg.eigvalsh(S))
-    )
-
-    print("================================\n")
