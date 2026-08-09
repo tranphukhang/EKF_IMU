@@ -75,10 +75,10 @@ class IMUG1Controller(run.G1Controller):
     if zupt_active:
       self.esekf.correct_zupt()
 
-    # Lấy trạng thái danh định hiện tại sau predict/correction
-    predicted_position = self.esekf.position.copy()
-    predicted_velocity = self.esekf.velocity.copy()
-    predicted_quaternion = self.esekf.quaternion.copy()
+    # Lấy trạng thái danh định sau chu kỳ predict/correction
+    estimated_position = self.esekf.position.copy()
+    estimated_velocity = self.esekf.velocity.copy()
+    estimated_quaternion = self.esekf.quaternion.copy()
 
     self.imu_visualizer.update(
       sample_time=self.data.time,
@@ -87,9 +87,9 @@ class IMUG1Controller(run.G1Controller):
     )
 
     self.imu_trajectory.update(
-      predicted_position,
-      predicted_velocity,
-      predicted_quaternion,
+      estimated_position,
+      estimated_velocity,
+      estimated_quaternion,
     )
 
 

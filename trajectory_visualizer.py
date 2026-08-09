@@ -40,9 +40,9 @@ class SiteTrajectoryVisualizer:
     self.quaternions: deque[np.ndarray] = deque(maxlen=max_points)
 
     # Trạng thái danh định sau bước dự đoán ESEKF
-    self.predicted_positions: deque[np.ndarray] = deque(maxlen=max_points)
-    self.predicted_velocities: deque[np.ndarray] = deque(maxlen=max_points)
-    self.predicted_quaternions: deque[np.ndarray] = deque(maxlen=max_points)
+    self.estimated_positions: deque[np.ndarray] = deque(maxlen=max_points)
+    self.estimated_velocities: deque[np.ndarray] = deque(maxlen=max_points)
+    self.estimated_quaternions: deque[np.ndarray] = deque(maxlen=max_points)
 
     plt.ion()
     self.figure = plt.figure(
@@ -56,12 +56,12 @@ class SiteTrajectoryVisualizer:
     (self.path_line,) = self.ax_3d.plot(
       [], [], [], color="tab:red", linewidth=1.5, label=site_name
     )
-    (self.predicted_path_line,) = self.ax_3d.plot(
+    (self.estimated_path_line,) = self.ax_3d.plot(
         [], [], [],
         color="tab:orange",
         linestyle="--",
         linewidth=1.5,
-        label="ESEKF prediction",
+        label="ESEKF estimate",
     )
     (self.current_point,) = self.ax_3d.plot(
       [], [], [], marker="o", color="black", markersize=5
@@ -74,7 +74,7 @@ class SiteTrajectoryVisualizer:
             ("red", "green", "blue")
         )
     ]
-    self.predicted_coordinate_lines = [
+    self.estimated_coordinate_lines = [
         self.ax_time.plot(
             [], [],
             label=f"{axis}",
@@ -100,7 +100,7 @@ class SiteTrajectoryVisualizer:
             ("red", "green", "blue"),
         )
     ]
-    self.predicted_velocity_lines = [
+    self.estimated_velocity_lines = [
         self.ax_velocity.plot(
             [], [],
             label=f"{axis}",
@@ -126,7 +126,7 @@ class SiteTrajectoryVisualizer:
             ("black", "red", "green", "blue"),
         )
     ]
-    self.predicted_quaternion_lines = [
+    self.estimated_quaternion_lines = [
         self.ax_quaternion.plot(
             [], [],
             label=f"{component}",
@@ -170,9 +170,9 @@ class SiteTrajectoryVisualizer:
 
   def update(
       self,
-      predicted_position: np.ndarray,
-      predicted_velocity: np.ndarray,
-      predicted_quaternion: np.ndarray,
+      estimated_position: np.ndarray,
+      estimated_velocity: np.ndarray,
+      estimated_quaternion: np.ndarray,
   ) -> None:
     """Record one sample and refresh the plots at the configured plot rate."""
     if not plt.fignum_exists(self.figure.number):
@@ -217,36 +217,36 @@ class SiteTrajectoryVisualizer:
     self.quaternions.append(site_quaternion.copy())
 
     # Lưu trạng thái danh định sau bước dự đoán ESEKF
-    predicted_position = np.asarray(
-        predicted_position, dtype=float
+    estimated_position = np.asarray(
+        estimated_position, dtype=float
     ).reshape(3)
 
-    predicted_velocity = np.asarray(
-        predicted_velocity, dtype=float
+    estimated_velocity = np.asarray(
+        estimated_velocity, dtype=float
     ).reshape(3)
 
-    predicted_quaternion = np.asarray(
-        predicted_quaternion, dtype=float
+    estimated_quaternion = np.asarray(
+        estimated_quaternion, dtype=float
     ).reshape(4)
 
-    # Chuẩn hóa quaternion dự đoán
-    quaternion_norm = np.linalg.norm(predicted_quaternion)
+    # Chuẩn hóa quaternion ước lượng
+    quaternion_norm = np.linalg.norm(estimated_quaternion)
     if quaternion_norm > 0.0:
-      predicted_quaternion = predicted_quaternion / quaternion_norm
+      estimated_quaternion = estimated_quaternion / quaternion_norm
 
-    # Tránh quaternion dự đoán bị đổi dấu trên đồ thị
+    # Tránh quaternion ước lượng bị đổi dấu trên đồ thị
     if (
-        self.predicted_quaternions
+        self.estimated_quaternions
         and np.dot(
-            predicted_quaternion,
-            self.predicted_quaternions[-1],
+            estimated_quaternion,
+            self.estimated_quaternions[-1],
         ) < 0.0
     ):
-      predicted_quaternion *= -1.0
+      estimated_quaternion *= -1.0
 
-    self.predicted_positions.append(predicted_position.copy())
-    self.predicted_velocities.append(predicted_velocity.copy())
-    self.predicted_quaternions.append(predicted_quaternion.copy())
+    self.estimated_positions.append(estimated_position.copy())
+    self.estimated_velocities.append(estimated_velocity.copy())
+    self.estimated_quaternions.append(estimated_quaternion.copy())
 
     self.last_sample_time = sample_time
 
@@ -262,9 +262,9 @@ class SiteTrajectoryVisualizer:
     self.positions.clear()
     self.velocities.clear()
     self.quaternions.clear()
-    self.predicted_positions.clear()
-    self.predicted_velocities.clear()
-    self.predicted_quaternions.clear()
+    self.estimated_positions.clear()
+    self.estimated_velocities.clear()
+    self.estimated_quaternions.clear()
     self.last_plot_time = -np.inf
     self.last_sample_time = None
 
@@ -281,49 +281,49 @@ class SiteTrajectoryVisualizer:
     positions = np.asarray(self.positions, dtype=float)
     velocities = np.asarray(self.velocities, dtype=float)
     quaternions = np.asarray(self.quaternions, dtype=float)
-    predicted_positions = np.asarray(self.predicted_positions, dtype=float)
-    predicted_velocities = np.asarray(self.predicted_velocities, dtype=float)
-    predicted_quaternions = np.asarray(self.predicted_quaternions, dtype=float)
+    estimated_positions = np.asarray(self.estimated_positions, dtype=float)
+    estimated_velocities = np.asarray(self.estimated_velocities, dtype=float)
+    estimated_quaternions = np.asarray(self.estimated_quaternions, dtype=float)
     x, y, z = positions.T
-    predicted_x, predicted_y, predicted_z = predicted_positions.T
+    estimated_x, estimated_y, estimated_z = estimated_positions.T
 
     self.path_line.set_data_3d(x, y, z)
-    self.predicted_path_line.set_data_3d(predicted_x, predicted_y, predicted_z,)
+    self.estimated_path_line.set_data_3d(estimated_x, estimated_y, estimated_z,)
     self.current_point.set_data_3d([x[-1]], [y[-1]], [z[-1]])
-    all_positions = np.vstack((positions, predicted_positions))
+    all_positions = np.vstack((positions, estimated_positions))
     self._set_3d_limits(all_positions)
 
     for axis_index, line in enumerate(self.coordinate_lines):
       line.set_data(times, positions[:, axis_index])
 
     for axis_index, line in enumerate(
-        self.predicted_coordinate_lines
+        self.estimated_coordinate_lines
     ):
       line.set_data(
           times,
-          predicted_positions[:, axis_index],
+          estimated_positions[:, axis_index],
       )
 
     for axis_index, line in enumerate(self.velocity_lines):
       line.set_data(times, velocities[:, axis_index])
 
     for axis_index, line in enumerate(
-        self.predicted_velocity_lines
+        self.estimated_velocity_lines
     ):
       line.set_data(
           times,
-          predicted_velocities[:, axis_index],
+          estimated_velocities[:, axis_index],
       )
 
     for component_index, line in enumerate(self.quaternion_lines):
       line.set_data(times, quaternions[:, component_index])
 
     for component_index, line in enumerate(
-        self.predicted_quaternion_lines
+        self.estimated_quaternion_lines
     ):
       line.set_data(
           times,
-          predicted_quaternions[:, component_index],
+          estimated_quaternions[:, component_index],
       )
 
     time_padding = max(0.1, 0.02 * max(times[-1] - times[0], 1.0))
@@ -339,7 +339,7 @@ class SiteTrajectoryVisualizer:
         times[-1] + time_padding,
     )
 
-    position_values = np.vstack((positions, predicted_positions))
+    position_values = np.vstack((positions, estimated_positions))
     position_min = float(np.min(position_values))
     position_max = float(np.max(position_values))
     position_padding = max(0.05, 0.05 * (position_max - position_min))
@@ -347,7 +347,7 @@ class SiteTrajectoryVisualizer:
       position_min - position_padding, position_max + position_padding
     )
 
-    velocity_values = np.vstack((velocities, predicted_velocities))
+    velocity_values = np.vstack((velocities, estimated_velocities))
     velocity_min = float(np.min(velocity_values))
     velocity_max = float(np.max(velocity_values))
     velocity_padding = max(

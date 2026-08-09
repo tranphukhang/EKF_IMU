@@ -289,23 +289,6 @@ class ESEKF:
     self.P = (G_reset @ self.P @ G_reset.T)
     self.P = 0.5 * (self.P + self.P.T)
 
-    print("\n===== ESEKF RESET =====")
-    print("delta_theta =", delta_theta)
-    print("G_theta =")
-    print(G_theta)
-
-    print(
-        "P symmetry error =",
-        np.max(np.abs(self.P - self.P.T)),
-    )
-
-    print(
-        "Min eigenvalue of P =",
-        np.min(np.linalg.eigvalsh(self.P)),
-    )
-
-    print("=======================\n")
-
     return r.copy()
 
 
