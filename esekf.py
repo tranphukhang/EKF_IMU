@@ -229,6 +229,24 @@ class ESEKF:
     ).T
     self.K_zupt = K.copy()
 
+    # Ước lượng trạng thái sai số hiệu chỉnh
+    # delta_x = K r
+    delta_x = K @ r
+    self.delta_x_zupt = delta_x.copy()
+    # Kiểm tra delta_x
+    assert delta_x.shape == (9,)
+    assert np.all(np.isfinite(delta_x))
+    delta_p = delta_x[0:3]
+    delta_v = delta_x[3:6]
+    delta_theta = delta_x[6:9]
+
+    print("\n===== ZUPT ERROR STATE =====")
+    print("delta_x     =", delta_x)
+    print("delta_p [m] =", delta_p)
+    print("delta_v [m/s] =", delta_v)
+    print("delta_theta [rad] =", delta_theta)
+    print("============================\n")
+
     return r.copy()
 
 
