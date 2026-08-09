@@ -18,14 +18,42 @@ class ZUPTTrigger:
             mujoco.mjtObj.mjOBJ_SITE,
             site_name,
         )
-
         if self.site_id < 0:
-            raise ValueError(
-                f"Không tìm thấy site: {site_name}"
+            raise ValueError(f"Không tìm thấy site: {site_name}")
+
+        self.ground_geom_id = mujoco.mj_name2id(
+            self.model,
+            mujoco.mjtObj.mjOBJ_GEOM,
+            "ground",
+        )
+
+        self.right_foot_geom_ids = {
+            mujoco.mj_name2id(
+                self.model,
+                mujoco.mjtObj.mjOBJ_GEOM,
+                f"right_foot{i}_collision",
             )
+            for i in range(1, 8)
+        }
 
         self.print_period = 1.0 / print_hz
         self.last_print_time = -np.inf
+
+
+    def right_foot_ground_contact(self) -> bool:
+        for i in range(self.data.ncon):
+            contact = self.data.contact[i]
+            geom1 = contact.geom1
+            geom2 = contact.geom2
+
+            if geom1 == self.ground_geom_id and geom2 in self.right_foot_geom_ids:
+                return True
+
+            if geom2 == self.ground_geom_id and geom1 in self.right_foot_geom_ids:
+                return True
+
+        return False
+
 
     def check(self) -> bool:
         # Lấy vận tốc 6D ground truth của site IMU trong world frame
@@ -45,17 +73,19 @@ class ZUPTTrigger:
             true_linear_velocity
         )
 
+        right_foot_contact = self.right_foot_ground_contact()
+
         current_time = float(self.data.time)
 
         if current_time < self.last_print_time:
             self.last_print_time = -np.inf
 
-        if ( current_time - self.last_print_time >= self.print_period):
+        if current_time - self.last_print_time >= self.print_period:
             print(
                 f"[ZUPT CHECK] "
                 f"t = {current_time:.3f} s | "
-                f"|v_true| = {speed:.6f} m/s"
-            )
+                f"contact = {right_foot_contact} | "
+                f"|v_true| = {speed:.6f} m/s")
 
             self.last_print_time = current_time
 
