@@ -71,7 +71,9 @@ class IMUG1Controller(run.G1Controller):
       angular_velocity=angular_velocity,
     )
 
-    self.zupt_trigger.check()
+    zupt_active = self.zupt_trigger.check()
+    if zupt_active:
+      self.esekf.correct_zupt()
 
     # Lấy trạng thái danh định ngay sau bước dự đoán
     predicted_position = self.esekf.position.copy()

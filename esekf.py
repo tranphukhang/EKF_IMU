@@ -56,6 +56,16 @@ class ESEKF:
     # Hiệp phương sai ban đầu
     self.P = self.P0.copy()
 
+    # Jacobian phép đo ZUPT
+    # Error state: [delta_p, delta_v, delta_theta]
+    self.H_zupt = np.zeros((3, 9), dtype=float)
+    self.H_zupt[:, 3:6] = np.eye(3)
+
+    # Độ lệch chuẩn của pseudo-measurement ZUPT
+    sigma_zupt = 0.01  # [m/s]
+    # Measurement covariance của ZUPT
+    self.R_zupt = np.eye(3, dtype=float) * sigma_zupt**2
+
     # Chu kỳ lấy mẫu IMU: 200 Hz
     self.delta_t = 0.005  # [s]
 
@@ -205,6 +215,20 @@ class ESEKF:
 
     self.zupt_residual = r.copy()
 
+    # Innovation covariance
+    H = self.H_zupt
+    R = self.R_zupt
+    S = H @ self.P @ H.T + R
+    self.zupt_innovation_covariance = S.copy()
+
+    # Kalman gain
+    PHt = self.P @ H.T
+    K = np.linalg.solve(
+        S,
+        PHt.T,
+    ).T
+    self.K_zupt = K.copy()
+
     return r.copy()
 
 
@@ -278,3 +302,39 @@ class ESEKF:
 
     print(f"Delta t = {self.delta_t:.4f} s")
     print("=================================\n")
+
+  def _print_zupt_debug(
+        self,
+        H: np.ndarray,
+        R: np.ndarray,
+        S: np.ndarray,
+        K: np.ndarray,
+    ) -> None:
+
+    print("\n========== ZUPT DEBUG ==========")
+
+    print("H shape =", H.shape)
+    print(H)
+
+    print("\nR shape =", R.shape)
+    print(R)
+
+    print("\nS shape =", S.shape)
+    print(S)
+
+    print("\nK shape =", K.shape)
+    print(K)
+
+    print("\nResidual r =", self.zupt_residual)
+
+    print(
+        "S symmetry error =",
+        np.max(np.abs(S - S.T))
+    )
+
+    print(
+        "Min eigenvalue of S =",
+        np.min(np.linalg.eigvalsh(S))
+    )
+
+    print("================================\n")
