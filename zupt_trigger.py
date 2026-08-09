@@ -8,13 +8,11 @@ class ZUPTTrigger:
         model,
         data,
         site_name="imu_right_foot",
-        velocity_threshold=0.02,
         print_hz=5.0,
     ):
         
         self.model = model
         self.data = data
-        self.velocity_threshold = velocity_threshold
 
         self.site_id = mujoco.mj_name2id(
             model,
@@ -57,10 +55,11 @@ class ZUPTTrigger:
 
         return False
 
+    def get_true_linear_velocity(self) -> np.ndarray:
+        """Ground-truth linear velocity của IMU site trong world frame."""
 
-    def check(self) -> bool:
-        # Lấy vận tốc 6D ground truth của site IMU trong world frame
         site_velocity_6d = np.zeros(6, dtype=float)
+
         mujoco.mj_objectVelocity(
             self.model,
             self.data,
@@ -69,16 +68,25 @@ class ZUPTTrigger:
             site_velocity_6d,
             0,  # world frame
         )
-        # 3 phần tử cuối là vận tốc tuyến tính
-        true_linear_velocity = site_velocity_6d[3:6]
-        # Độ lớn vận tốc
+
+        return site_velocity_6d[3:6].copy()
+
+    def check(self) -> bool:
+
+        true_linear_velocity = (
+            self.get_true_linear_velocity()
+        )
+
         speed = np.linalg.norm(
             true_linear_velocity
         )
 
-        right_foot_contact = self.right_foot_ground_contact()
+        right_foot_contact = (
+            self.right_foot_ground_contact()
+        )
 
-        zupt_candidate = right_foot_contact and speed < self.velocity_threshold
+        zupt_candidate = right_foot_contact
+
 
         current_time = float(self.data.time)
 
