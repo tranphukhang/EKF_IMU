@@ -232,13 +232,30 @@ class ESEKF:
     # Ước lượng trạng thái sai số hiệu chỉnh
     # delta_x = K r
     delta_x = K @ r
-    self.delta_x_zupt = delta_x.copy()
     # Kiểm tra delta_x
     assert delta_x.shape == (9,)
     assert np.all(np.isfinite(delta_x))
+    self.delta_x_zupt = delta_x.copy()
     delta_p = delta_x[0:3]
     delta_v = delta_x[3:6]
     delta_theta = delta_x[6:9]
+
+    position_before = self.position.copy()
+    velocity_before = self.velocity.copy()
+
+    # Inject position và velocity error vào nominal state
+    self.position[:] += delta_p
+    self.velocity[:] += delta_v
+
+    print("\n===== ZUPT P-V INJECTION =====")
+    print("p before =", position_before)
+    print("delta_p  =", delta_p)
+    print("p after  =", self.position)
+
+    print("v before =", velocity_before)
+    print("delta_v  =", delta_v)
+    print("v after  =", self.velocity)
+    print("==============================\n")
 
     return r.copy()
 
