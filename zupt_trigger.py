@@ -8,10 +8,13 @@ class ZUPTTrigger:
         model,
         data,
         site_name="imu_right_foot",
+        velocity_threshold=0.1,
         print_hz=5.0,
     ):
+        
         self.model = model
         self.data = data
+        self.velocity_threshold = velocity_threshold
 
         self.site_id = mujoco.mj_name2id(
             model,
@@ -75,6 +78,8 @@ class ZUPTTrigger:
 
         right_foot_contact = self.right_foot_ground_contact()
 
+        zupt_candidate = right_foot_contact and speed < self.velocity_threshold
+
         current_time = float(self.data.time)
 
         if current_time < self.last_print_time:
@@ -85,8 +90,9 @@ class ZUPTTrigger:
                 f"[ZUPT CHECK] "
                 f"t = {current_time:.3f} s | "
                 f"contact = {right_foot_contact} | "
-                f"|v_true| = {speed:.6f} m/s")
-
+                f"|v_true| = {speed:.6f} m/s | "
+                f"candidate = {zupt_candidate}"
+            )
             self.last_print_time = current_time
 
         return False
