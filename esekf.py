@@ -279,17 +279,32 @@ class ESEKF:
     P_corrected = 0.5 * (P_corrected + P_corrected.T)
     self.P = P_corrected
 
-    print("\n===== ZUPT COVARIANCE UPDATE =====")
-    print("P diag after =", np.diag(self.P))
+    # Reset Jacobian
+    G_reset = np.eye(9, dtype=float)
+    G_theta = (
+        np.eye(3, dtype=float)
+        + 0.5 * self._skew(delta_theta)
+    )
+    G_reset[6:9, 6:9] = G_theta
+    self.P = (G_reset @ self.P @ G_reset.T)
+    self.P = 0.5 * (self.P + self.P.T)
+
+    print("\n===== ESEKF RESET =====")
+    print("delta_theta =", delta_theta)
+    print("G_theta =")
+    print(G_theta)
+
     print(
         "P symmetry error =",
         np.max(np.abs(self.P - self.P.T)),
     )
+
     print(
         "Min eigenvalue of P =",
         np.min(np.linalg.eigvalsh(self.P)),
     )
-    print("==================================\n")
+
+    print("=======================\n")
 
     return r.copy()
 

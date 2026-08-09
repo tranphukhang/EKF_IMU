@@ -75,7 +75,7 @@ class IMUG1Controller(run.G1Controller):
     if zupt_active:
       self.esekf.correct_zupt()
 
-    # Lấy trạng thái danh định ngay sau bước dự đoán
+    # Lấy trạng thái danh định hiện tại sau predict/correction
     predicted_position = self.esekf.position.copy()
     predicted_velocity = self.esekf.velocity.copy()
     predicted_quaternion = self.esekf.quaternion.copy()
