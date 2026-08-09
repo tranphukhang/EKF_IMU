@@ -117,6 +117,48 @@ class IMUG1Controller(run.G1Controller):
             self.zupt_trigger.right_foot_ground_contact()
         )
 
+        # Các contact point giữa chân phải và ground
+        contact_points = []
+
+        for i in range(self.data.ncon):
+            contact = self.data.contact[i]
+
+            geom1 = contact.geom1
+            geom2 = contact.geom2
+
+            is_right_foot_ground = (
+                (
+                    geom1 == self.zupt_trigger.ground_geom_id
+                    and geom2 in self.zupt_trigger.right_foot_geom_ids
+                )
+                or
+                (
+                    geom2 == self.zupt_trigger.ground_geom_id
+                    and geom1 in self.zupt_trigger.right_foot_geom_ids
+                )
+            )
+
+            if is_right_foot_ground:
+                contact_points.append(
+                    contact.pos.copy()
+                )
+
+        if contact_points:
+          contact_points = np.asarray(
+              contact_points,
+              dtype=float,
+          )
+
+          mean_contact_pos = np.mean(
+              contact_points,
+              axis=0,
+          )
+        else:
+            mean_contact_pos = np.full(
+                3,
+                np.nan,
+            )
+
         print("\n===== STATIONARY MOTION DEBUG =====")
         print(
             f"time             = {self.data.time:.3f} s"
@@ -140,6 +182,16 @@ class IMUG1Controller(run.G1Controller):
         print(
             "right contact    =",
             foot_contact,
+        )
+
+        print(
+            "mean contact pos =",
+            mean_contact_pos,
+        )
+
+        print(
+            "num contacts     =",
+            len(contact_points),
         )
         print("===================================\n")
 
