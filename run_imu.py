@@ -3,9 +3,6 @@
 
 import sys
 
-import mujoco
-import numpy as np
-
 import run
 from imu_data_reader import IMUDataReader
 from trajectory_visualizer import SiteTrajectoryVisualizer
@@ -58,9 +55,6 @@ class IMUG1Controller(run.G1Controller):
         print_hz=5.0,
     )
 
-    # Debug chuyển động thật của robot khi đứng yên
-    self.last_motion_debug_time = -np.inf
-
 
   def step(self):
     target_pos = super().step()
@@ -82,161 +76,6 @@ class IMUG1Controller(run.G1Controller):
     # TEST: cho robot settle 0.25 s trước khi chạy ESEKF
     if self.data.time < 0.25:
         return
-
-    ######
-    # Debug ground-truth motion mỗi 0.5 s
-    if self.data.time - self.last_motion_debug_time >= 0.5:
-
-        # Vị trí world của IMU chân phải
-        imu_pos = self.data.site_xpos[
-            self.esekf.site_id
-        ].copy()
-
-        # Vị trí floating base của robot trong world
-        base_pos = self.data.qpos[0:3].copy()
-
-        # Vị trí IMU tương đối so với floating base
-        imu_relative_to_base = imu_pos - base_pos
-
-        # Vận tốc thật của IMU trong world
-        site_velocity_6d = np.zeros(6, dtype=float)
-
-        mujoco.mj_objectVelocity(
-            self.model,
-            self.data,
-            mujoco.mjtObj.mjOBJ_SITE,
-            self.esekf.site_id,
-            site_velocity_6d,
-            0,
-        )
-
-        imu_velocity = site_velocity_6d[3:6].copy()
-
-        # Kiểm tra chân phải đang contact ground hay không
-        foot_contact = (
-            self.zupt_trigger.right_foot_ground_contact()
-        )
-
-        # Các contact point giữa chân phải và ground
-        contact_points = []
-
-        for i in range(self.data.ncon):
-            contact = self.data.contact[i]
-
-            geom1 = contact.geom1
-            geom2 = contact.geom2
-
-            is_right_foot_ground = (
-                (
-                    geom1 == self.zupt_trigger.ground_geom_id
-                    and geom2 in self.zupt_trigger.right_foot_geom_ids
-                )
-                or
-                (
-                    geom2 == self.zupt_trigger.ground_geom_id
-                    and geom1 in self.zupt_trigger.right_foot_geom_ids
-                )
-            )
-
-            if is_right_foot_ground:
-                contact_points.append(
-                    contact.pos.copy()
-                )
-
-        if contact_points:
-          contact_points = np.asarray(
-              contact_points,
-              dtype=float,
-          )
-
-          mean_contact_pos = np.mean(
-              contact_points,
-              axis=0,
-          )
-        else:
-            mean_contact_pos = np.full(
-                3,
-                np.nan,
-            )
-
-        print("\n===== STATIONARY MOTION DEBUG =====")
-        print(
-            f"time             = {self.data.time:.3f} s"
-        )
-        print(
-            "IMU world pos    =",
-            imu_pos,
-        )
-        print(
-            "base world pos   =",
-            base_pos,
-        )
-        print(
-            "IMU - base       =",
-            imu_relative_to_base,
-        )
-        print(
-            "IMU world vel    =",
-            imu_velocity,
-        )
-        print(
-            "right contact    =",
-            foot_contact,
-        )
-
-        print(
-            "mean contact pos =",
-            mean_contact_pos,
-        )
-
-        print(
-            "num contacts     =",
-            len(contact_points),
-        )
-        print("===================================\n")
-
-        self.last_motion_debug_time = self.data.time
-    ######
-
-    # Kiểm tra attitude thật tại thời điểm ESEKF bắt đầu
-    if not self.esekf.initialized:
-
-        q_true = np.empty(4, dtype=float)
-
-        mujoco.mju_mat2Quat(
-            q_true,
-            self.data.site_xmat[self.esekf.site_id],
-        )
-
-        q_est_initial = self.esekf.quaternion.copy()
-
-        # q và -q biểu diễn cùng một orientation
-        dot_q = np.clip(
-            abs(np.dot(q_true, q_est_initial)),
-            -1.0,
-            1.0,
-        )
-
-        angle_error = 2.0 * np.arccos(dot_q)
-
-        print("\n===== ESEKF INITIAL ATTITUDE CHECK =====")
-        print(
-            f"time              = {self.data.time:.3f} s"
-        )
-        print(
-            "q_true IMU->world  =",
-            q_true,
-        )
-        print(
-            "q_ESEKF initial    =",
-            q_est_initial,
-        )
-        print(
-            "attitude error     =",
-            np.rad2deg(angle_error),
-            "deg",
-        )
-        print("========================================\n")
 
     # Chỉ khởi tạo ESEKF sau khi robot đã settle
     self.esekf.initialize_once()
