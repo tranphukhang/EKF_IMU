@@ -58,6 +58,9 @@ class IMUG1Controller(run.G1Controller):
         print_hz=5.0,
     )
 
+    # Debug chuyển động thật của robot khi đứng yên
+    self.last_motion_debug_time = -np.inf
+
 
   def step(self):
     target_pos = super().step()
@@ -79,6 +82,69 @@ class IMUG1Controller(run.G1Controller):
     # TEST: cho robot settle 0.25 s trước khi chạy ESEKF
     if self.data.time < 0.25:
         return
+
+    ######
+    # Debug ground-truth motion mỗi 0.5 s
+    if self.data.time - self.last_motion_debug_time >= 0.5:
+
+        # Vị trí world của IMU chân phải
+        imu_pos = self.data.site_xpos[
+            self.esekf.site_id
+        ].copy()
+
+        # Vị trí floating base của robot trong world
+        base_pos = self.data.qpos[0:3].copy()
+
+        # Vị trí IMU tương đối so với floating base
+        imu_relative_to_base = imu_pos - base_pos
+
+        # Vận tốc thật của IMU trong world
+        site_velocity_6d = np.zeros(6, dtype=float)
+
+        mujoco.mj_objectVelocity(
+            self.model,
+            self.data,
+            mujoco.mjtObj.mjOBJ_SITE,
+            self.esekf.site_id,
+            site_velocity_6d,
+            0,
+        )
+
+        imu_velocity = site_velocity_6d[3:6].copy()
+
+        # Kiểm tra chân phải đang contact ground hay không
+        foot_contact = (
+            self.zupt_trigger.right_foot_ground_contact()
+        )
+
+        print("\n===== STATIONARY MOTION DEBUG =====")
+        print(
+            f"time             = {self.data.time:.3f} s"
+        )
+        print(
+            "IMU world pos    =",
+            imu_pos,
+        )
+        print(
+            "base world pos   =",
+            base_pos,
+        )
+        print(
+            "IMU - base       =",
+            imu_relative_to_base,
+        )
+        print(
+            "IMU world vel    =",
+            imu_velocity,
+        )
+        print(
+            "right contact    =",
+            foot_contact,
+        )
+        print("===================================\n")
+
+        self.last_motion_debug_time = self.data.time
+    ######
 
     # Kiểm tra attitude thật tại thời điểm ESEKF bắt đầu
     if not self.esekf.initialized:
