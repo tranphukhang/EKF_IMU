@@ -289,8 +289,19 @@ class ESEKF:
     self.quaternion[:] = quaternion_corrected
 
     # Cập nhật covariance sau ZUPT
-    I_KH = np.eye(9, dtype=float) - K @ H
-    P_corrected = I_KH @ self.P @ I_KH.T + K @ R @ K.T
+    # I_KH = np.eye(9, dtype=float) - K @ H
+    # P_corrected = I_KH @ self.P @ I_KH.T + K @ R @ K.T
+
+    #####
+    # Cập nhật covariance sau ZUPT
+    I_KH = np.eye(9, dtype=float) - K_used @ H
+
+    P_corrected = (
+        I_KH @ self.P @ I_KH.T
+        + K_used @ R @ K_used.T
+    )
+    #####
+
     # Giữ P đối xứng do sai số số học
     P_corrected = 0.5 * (P_corrected + P_corrected.T)
     self.P = P_corrected
