@@ -200,11 +200,21 @@ class ESEKF:
     return self.x_hat.copy()
     
 
-  def correct_zupt(self) -> np.ndarray:
+  def correct_zupt(
+        self,
+        measured_velocity: np.ndarray,
+    ) -> np.ndarray:
     """Bước hiệu chỉnh ZUPT."""
 
-    # Phép đo giả ZUPT: vận tốc chân bằng 0
-    z = np.zeros(3, dtype=float)
+    measured_velocity = np.asarray(
+        measured_velocity,
+        dtype=float,
+    )
+
+    assert measured_velocity.shape == (3,)
+
+    # Ground-truth velocity measurement từ MuJoCo
+    z = measured_velocity.copy()
 
     # h(x_hat) = v_hat
     predicted_measurement = self.velocity.copy()

@@ -89,7 +89,11 @@ class IMUG1Controller(run.G1Controller):
     # ZUPT correction
     zupt_active = self.zupt_trigger.check()
     if zupt_active:
-        self.esekf.correct_zupt()
+      true_velocity = (
+          self.zupt_trigger.get_true_linear_velocity()
+      )
+
+      self.esekf.correct_zupt(true_velocity)
 
     # Lấy trạng thái danh định sau predict/correction
     estimated_position = self.esekf.position.copy()
