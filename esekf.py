@@ -277,6 +277,22 @@ class ESEKF:
     # h(x_hat) = v_hat
     predicted_measurement = self.velocity.copy()
 
+    ######
+    # Ground-truth velocity của IMU site trong world
+    site_velocity_6d = np.zeros(6, dtype=float)
+
+    mujoco.mj_objectVelocity(
+        self.model,
+        self.data,
+        mujoco.mjtObj.mjOBJ_SITE,
+        self.site_id,
+        site_velocity_6d,
+        0,
+    )
+
+    v_true = site_velocity_6d[3:6].copy()
+    ######
+
     # Residual / innovation:
     # r = z - h(x_hat)
     r = z - predicted_measurement
@@ -307,6 +323,35 @@ class ESEKF:
     delta_p = delta_x[0:3]
     delta_v = delta_x[3:6]
     delta_theta = delta_x[6:9]
+
+    ######
+    # Velocity error thật
+    delta_v_true = (
+        v_true - predicted_measurement
+    )
+
+    # Phần Kalman gain ánh xạ velocity residual -> attitude error
+    K_theta = K[6:9, :]
+
+    # Correction attitude mà filter hiện đang dùng
+    delta_theta_from_r = K_theta @ r
+
+    # Chỉ để debug:
+    # Nếu innovation đúng bằng velocity error thật thì attitude correction sẽ là gì?
+    delta_theta_from_true_dv = (
+        K_theta @ delta_v_true
+    )
+
+    alignment_r = np.dot(
+        attitude_error_before,
+        delta_theta_from_r,
+    )
+
+    alignment_true_dv = np.dot(
+        attitude_error_before,
+        delta_theta_from_true_dv,
+    )
+    ######
 
     # Inject position và velocity error vào nominal state
     self.position[:] += delta_p
@@ -382,39 +427,42 @@ class ESEKF:
     self.P = 0.5 * (self.P + self.P.T)
 
 
-    print("\n===== ATTITUDE INJECTION CHECK =====")
+    print("\n===== ZUPT K_THETA CHECK =====")
+
+    print("v_true          =", v_true)
+    print("v_hat           =", predicted_measurement)
+    print("r = -v_hat      =", r)
+    print("delta_v_true    =", delta_v_true)
 
     print(
-        "true error before =",
-        attitude_error_before,
+        "r - delta_v_true =",
+        r - delta_v_true,
+    )
+
+    print("K_theta =")
+    print(K_theta)
+
+    print(
+        "delta_theta from r       =",
+        delta_theta_from_r,
     )
 
     print(
-        "delta_theta EKF   =",
-        delta_theta,
+        "delta_theta from true dv =",
+        delta_theta_from_true_dv,
     )
 
     print(
-        "expected after    =",
-        expected_error_after,
+        "alignment using r       =",
+        alignment_r,
     )
 
     print(
-        "actual after      =",
-        attitude_error_after,
+        "alignment using true dv =",
+        alignment_true_dv,
     )
 
-    print(
-        "injection check error =",
-        injection_check_error,
-    )
-
-    print(
-        "alignment =",
-        alignment,
-    )
-
-    print("====================================\n")
+    print("=============================\n")
 
 
     return r.copy()
