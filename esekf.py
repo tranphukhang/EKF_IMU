@@ -240,22 +240,56 @@ class ESEKF:
     delta_v = delta_x[3:6]
     delta_theta = delta_x[6:9]
 
-    position_before = self.position.copy()
-    velocity_before = self.velocity.copy()
-
     # Inject position và velocity error vào nominal state
     self.position[:] += delta_p
     self.velocity[:] += delta_v
+    # Chuyển delta_theta thành delta quaternion
+    quaternion_before = self.quaternion.copy()
+    angle = np.linalg.norm(delta_theta)
+    delta_q = np.empty(4, dtype=float)
+    if angle < 1e-12:
+        delta_q[:] = np.array([
+            1.0,
+            0.5 * delta_theta[0],
+            0.5 * delta_theta[1],
+            0.5 * delta_theta[2],
+        ])
+    else:
+        axis = delta_theta / angle
+        mujoco.mju_axisAngle2Quat(
+            delta_q,
+            axis,
+            angle,
+        )
+    # Global angular error:
+    # q_plus = delta_q ⊗ q_minus
+    quaternion_corrected = np.empty(4, dtype=float)
+    mujoco.mju_mulQuat(
+        quaternion_corrected,
+        delta_q,
+        quaternion_before,
+    )
+    mujoco.mju_normalize4(quaternion_corrected)
+    self.quaternion[:] = quaternion_corrected
 
-    print("\n===== ZUPT P-V INJECTION =====")
-    print("p before =", position_before)
-    print("delta_p  =", delta_p)
-    print("p after  =", self.position)
+    # Cập nhật covariance sau ZUPT
+    I_KH = np.eye(9, dtype=float) - K @ H
+    P_corrected = I_KH @ self.P @ I_KH.T + K @ R @ K.T
+    # Giữ P đối xứng do sai số số học
+    P_corrected = 0.5 * (P_corrected + P_corrected.T)
+    self.P = P_corrected
 
-    print("v before =", velocity_before)
-    print("delta_v  =", delta_v)
-    print("v after  =", self.velocity)
-    print("==============================\n")
+    print("\n===== ZUPT COVARIANCE UPDATE =====")
+    print("P diag after =", np.diag(self.P))
+    print(
+        "P symmetry error =",
+        np.max(np.abs(self.P - self.P.T)),
+    )
+    print(
+        "Min eigenvalue of P =",
+        np.min(np.linalg.eigvalsh(self.P)),
+    )
+    print("==================================\n")
 
     return r.copy()
 
