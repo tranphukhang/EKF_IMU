@@ -240,13 +240,6 @@ class ESEKF:
     delta_v = delta_x[3:6]
     delta_theta = delta_x[6:9]
 
-    print("\n===== ZUPT ERROR STATE =====")
-    print("delta_x     =", delta_x)
-    print("delta_p [m] =", delta_p)
-    print("delta_v [m/s] =", delta_v)
-    print("delta_theta [rad] =", delta_theta)
-    print("============================\n")
-
     return r.copy()
 
 
