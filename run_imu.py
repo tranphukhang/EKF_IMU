@@ -73,10 +73,6 @@ class IMUG1Controller(run.G1Controller):
         angular_velocity=angular_velocity,
     )
 
-    # TEST: cho robot settle 0.25 s trước khi chạy ESEKF
-    if self.data.time < 0.25:
-        return
-
     # Chỉ khởi tạo ESEKF sau khi robot đã settle
     self.esekf.initialize_once()
 

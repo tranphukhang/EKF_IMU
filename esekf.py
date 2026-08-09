@@ -62,7 +62,7 @@ class ESEKF:
     self.H_zupt[:, 3:6] = np.eye(3)
 
     # Độ lệch chuẩn của pseudo-measurement ZUPT
-    sigma_zupt = 0.01  # [m/s]
+    sigma_zupt = 0.001  # [m/s]
     # Measurement covariance của ZUPT
     self.R_zupt = np.eye(3, dtype=float) * sigma_zupt**2
 
