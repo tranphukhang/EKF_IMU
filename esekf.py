@@ -190,6 +190,24 @@ class ESEKF:
     return self.x_hat.copy()
     
 
+  def correct_zupt(self) -> np.ndarray:
+    """Bước hiệu chỉnh ZUPT."""
+
+    # Phép đo giả ZUPT: vận tốc chân bằng 0
+    z = np.zeros(3, dtype=float)
+
+    # h(x_hat) = v_hat
+    predicted_measurement = self.velocity.copy()
+
+    # Residual / innovation:
+    # r = z - h(x_hat)
+    r = z - predicted_measurement
+
+    self.zupt_residual = r.copy()
+
+    return r.copy()
+
+
   def _print_prediction(self) -> None:
     current_time = float(self.data.time)
 
