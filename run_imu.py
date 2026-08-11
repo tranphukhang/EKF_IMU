@@ -171,7 +171,158 @@ class IMUG1Controller(run.G1Controller):
         estimated_quaternion,
     )
 
+  # ============================================================
+  # TEST_TIMING_SPLIT BEGIN
+  # Pha PRE-STEP:
+  # Đọc IMU tại state t_k và dùng chính sample này
+  # để ESEKF predict từ t_k -> t_k+1.
+  # Sau test xóa toàn bộ hàm này.
+  # ============================================================
+  def test_esekf_pre_step(self) -> None:
 
+    # Đọc IMU tại state hiện tại t_k
+    acceleration, angular_velocity = (
+        self.imu_reader.update()
+    )
+
+    # Lưu lại chính sample đã dùng cho prediction.
+    # Pha post-step sẽ dùng lại để log.
+    self._test_acceleration = acceleration.copy()
+    self._test_angular_velocity = angular_velocity.copy()
+
+    # Plot raw IMU tại thời điểm t_k
+    self.imu_visualizer.update(
+        sample_time=self.data.time,
+        acceleration=acceleration,
+        angular_velocity=angular_velocity,
+    )
+
+    # ESEKF đã được initialize từ GT bởi TEST_ONLY trước đó.
+    # initialize_once() ở đây chủ yếu để giữ logic print hiện tại.
+    self.esekf.initialize_once()
+
+    # Prediction:
+    # x_hat(t_k) -> x_hat(t_k+1)
+    self.esekf.predict(
+        acceleration=acceleration,
+        angular_velocity=angular_velocity,
+    )
+
+  # TEST_TIMING_SPLIT END
+
+  # ============================================================
+  # TEST_TIMING_SPLIT BEGIN
+  # Pha POST-STEP:
+  # MuJoCo đã chuyển sang t_k+1 và mj_forward() đã recompute
+  # các đại lượng dẫn xuất. Lúc này mới lấy GT để đối chiếu
+  # với ESEKF prediction tại cùng thời điểm t_k+1.
+  # Sau test xóa toàn bộ hàm này.
+  # ============================================================
+  def test_esekf_post_step(self) -> None:
+
+    # Bảo đảm pre-step đã chạy
+    assert hasattr(
+        self,
+        "_test_acceleration",
+    )
+
+    assert hasattr(
+        self,
+        "_test_angular_velocity",
+    )
+
+    acceleration = (
+        self._test_acceleration.copy()
+    )
+
+    angular_velocity = (
+        self._test_angular_velocity.copy()
+    )
+
+    # Không correction trong prediction-only test
+    zupt_active = False
+
+    # Ground-truth velocity tại t_k+1
+    true_velocity = (
+        self.zupt_trigger.get_true_linear_velocity()
+    )
+
+    # ESEKF prediction tại t_k+1
+    estimated_position = (
+        self.esekf.position.copy()
+    )
+
+    estimated_velocity = (
+        self.esekf.velocity.copy()
+    )
+
+    estimated_quaternion = (
+        self.esekf.quaternion.copy()
+    )
+
+    # Ground-truth position tại t_k+1
+    true_position = (
+        self.data.site_xpos[
+            self.esekf.site_id
+        ].copy()
+    )
+
+    # Ground-truth quaternion tại t_k+1
+    true_quaternion = np.empty(
+        4,
+        dtype=float,
+    )
+
+    mujoco.mju_mat2Quat(
+        true_quaternion,
+        self.data.site_xmat[
+            self.esekf.site_id
+        ],
+    )
+
+    # q và -q biểu diễn cùng orientation
+    if (
+        np.dot(
+            true_quaternion,
+            estimated_quaternion,
+        ) < 0.0
+    ):
+        true_quaternion *= -1.0
+
+    # Lưu một transition:
+    #
+    # IMU_k
+    #   -> predict
+    # x_hat_(k+1)
+    #
+    # rồi so với GT_(k+1)
+    self.data_logger.log(
+        sample_time=float(self.data.time),
+
+        acceleration=acceleration,
+        angular_velocity=angular_velocity,
+
+        gt_position=true_position,
+        gt_velocity=true_velocity,
+        gt_quaternion=true_quaternion,
+
+        est_position=estimated_position,
+        est_velocity=estimated_velocity,
+        est_quaternion=estimated_quaternion,
+
+        correction_applied=zupt_active,
+
+        covariance=self.esekf.P.copy(),
+    )
+
+    # Plot ESEKF prediction vs GT tại t_k+1
+    self.imu_trajectory.update(
+        estimated_position,
+        estimated_velocity,
+        estimated_quaternion,
+    )
+
+  # TEST_TIMING_SPLIT END
 
 
 if __name__ == "__main__":
