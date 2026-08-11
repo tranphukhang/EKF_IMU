@@ -728,7 +728,18 @@ def main():
         if control_step % decimation == 0:
           target_pos = ctrl.step()
         ctrl.apply_pd_control(target_pos)
-        mujoco.mj_step(model, data)
+
+        # ============================================================
+        # TEST_TIMING_ONLY BEGIN
+        # Kiểm tra giả thuyết:
+        # Sau mj_step(), qpos/qvel đã được tích phân sang state mới,
+        # nhưng các đại lượng dẫn xuất/sensor cần được recompute
+        # theo state hiện tại trước khi ESEKF đọc chúng.
+        #
+        # Sau khi test xong, xóa block TEST_TIMING_ONLY này.
+        # ============================================================
+        mujoco.mj_forward(model, data)
+        # TEST_TIMING_ONLY END
 
         if hasattr(ctrl, "step_esekf"):
           ctrl.step_esekf()
