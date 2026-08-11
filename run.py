@@ -526,7 +526,7 @@ def main():
   xml_path = SCRIPT_DIR / "scene.xml"
   print(f"Loading scene: {xml_path}")
   model = mujoco.MjModel.from_xml_path(str(xml_path))
-  model.opt.timestep = 0.001  # 1000 Hz — must match training
+  model.opt.timestep = 0.0001  # 1000 Hz — must match training
   set_armature(model, joint_names)
 
   data = mujoco.MjData(model)
