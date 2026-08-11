@@ -700,7 +700,10 @@ def main():
       max_catchup = 0.05  # Never try to catch up more than 50ms per frame
       if wall - sim_time > max_catchup:
         sim_time = wall - max_catchup
-      while sim_time < wall:
+      while (
+          sim_time < wall
+          and data.time < simulation_duration
+      ):
         if control_step % decimation == 0:
           target_pos = ctrl.step()
         ctrl.apply_pd_control(target_pos)
@@ -711,6 +714,13 @@ def main():
 
         control_step += 1
         sim_time += model.opt.timestep
+
+      if data.time >= simulation_duration:
+        print(
+            f"[SIMULATION] Đã chạy đủ "
+            f"{simulation_duration:.1f} s."
+        )
+        break
 
       now = time.perf_counter()
       if now - last_viewer_sync >= viewer_interval:
@@ -733,6 +743,9 @@ def main():
             img = cam_renderer.render("wrist_cam")
             cv2.imshow("Wrist Camera", cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
           cv2.waitKey(1)
+
+  if hasattr(ctrl, "data_logger"):
+    ctrl.data_logger.save()
 
   # Cleanup
   if cv2:

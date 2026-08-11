@@ -2,6 +2,8 @@
 """Run the G1 walking simulation with live right-foot IMU visualization."""
 
 import sys
+import mujoco
+import numpy as np
 
 import run
 from imu_data_reader import IMUDataReader
@@ -9,6 +11,7 @@ from trajectory_visualizer import SiteTrajectoryVisualizer
 from imu_data_visualizer import IMUDataVisualizer
 from esekf import ESEKF
 from zupt_trigger import ZUPTTrigger
+from data_logger import SimulationDataLogger
 
 
 class IMUG1Controller(run.G1Controller):
@@ -55,6 +58,8 @@ class IMUG1Controller(run.G1Controller):
         print_hz=5.0,
     )
 
+    self.data_logger = SimulationDataLogger()
+
 
   def step(self):
     target_pos = super().step()
@@ -84,17 +89,69 @@ class IMUG1Controller(run.G1Controller):
 
     # ZUPT correction
     zupt_active = self.zupt_trigger.check()
-    if zupt_active:
-      true_velocity = (
-          self.zupt_trigger.get_true_linear_velocity()
-      )
 
-      self.esekf.correct_zupt(true_velocity)
+    # Ground-truth velocity của IMU trong world frame
+    true_velocity = (
+        self.zupt_trigger.get_true_linear_velocity()
+    )
+
+    if zupt_active:
+        self.esekf.correct_zupt(true_velocity)
 
     # Lấy trạng thái danh định sau predict/correction
     estimated_position = self.esekf.position.copy()
     estimated_velocity = self.esekf.velocity.copy()
     estimated_quaternion = self.esekf.quaternion.copy()
+
+    # Ground-truth position của IMU site trong world frame
+    true_position = (
+        self.data.site_xpos[
+            self.esekf.site_id
+        ].copy()
+    )
+
+    # Ground-truth quaternion IMU -> world [w, x, y, z]
+    true_quaternion = np.empty(
+        4,
+        dtype=float,
+    )
+
+    # q và -q biểu diễn cùng một rotation.
+    # Chọn dấu ground truth gần với quaternion ESEKF nhất
+    # để thuận tiện khi plot và so sánh.
+    if (
+        np.dot(
+            true_quaternion,
+            estimated_quaternion,
+        ) < 0.0
+    ):
+        true_quaternion *= -1.0
+
+    mujoco.mju_mat2Quat(
+        true_quaternion,
+        self.data.site_xmat[
+            self.esekf.site_id
+        ],
+    )
+
+    self.data_logger.log(
+        sample_time=float(self.data.time),
+
+        acceleration=acceleration,
+        angular_velocity=angular_velocity,
+
+        gt_position=true_position,
+        gt_velocity=true_velocity,
+        gt_quaternion=true_quaternion,
+
+        est_position=estimated_position,
+        est_velocity=estimated_velocity,
+        est_quaternion=estimated_quaternion,
+
+        correction_applied=zupt_active,
+
+        covariance=self.esekf.P.copy(),
+    )
 
     # Plot trajectory ESEKF
     self.imu_trajectory.update(
@@ -102,6 +159,8 @@ class IMUG1Controller(run.G1Controller):
         estimated_velocity,
         estimated_quaternion,
     )
+
+
 
 
 if __name__ == "__main__":
