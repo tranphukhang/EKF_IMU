@@ -729,56 +729,22 @@ def main():
           target_pos = ctrl.step()
         ctrl.apply_pd_control(target_pos)
 
-        # ============================================================
-        # TEST_TIMING_SPLIT BEGIN
-        #
-        # PRE-STEP:
-        # Recompute dynamics/sensor tại state t_k với control hiện tại,
-        # sau đó đọc IMU_k và ESEKF predict t_k -> t_k+1.
-        #
-        # Sau test xóa block TEST_TIMING_SPLIT.
-        # ============================================================
-        mujoco.mj_forward(model, data)
-
-        if hasattr(
-            ctrl,
-            "test_esekf_pre_step",
-        ):
-          ctrl.test_esekf_pre_step()
-
-        # TEST_TIMING_SPLIT END
-
-
-        # MuJoCo propagate:
-        # x_k -> x_k+1
         mujoco.mj_step(model, data)
-
 
         # ============================================================
         # TEST_TIMING_ONLY BEGIN
-        # Recompute các đại lượng dẫn xuất theo state mới t_k+1.
+        # Kiểm tra giả thuyết:
+        # Sau mj_step(), qpos/qvel đã được tích phân sang state mới,
+        # nhưng các đại lượng dẫn xuất/sensor cần được recompute
+        # theo state hiện tại trước khi ESEKF đọc chúng.
+        #
+        # Sau khi test xong, xóa block TEST_TIMING_ONLY này.
         # ============================================================
         mujoco.mj_forward(model, data)
         # TEST_TIMING_ONLY END
 
-
-        # ============================================================
-        # TEST_TIMING_SPLIT BEGIN
-        #
-        # POST-STEP:
-        # Lấy GT tại t_k+1 và log cùng prediction ESEKF t_k+1.
-        #
-        # QUAN TRỌNG:
-        # Không gọi step_esekf() cũ trong test này,
-        # nếu không ESEKF sẽ predict thêm lần thứ hai.
-        # ============================================================
-        if hasattr(
-            ctrl,
-            "test_esekf_post_step",
-        ):
-          ctrl.test_esekf_post_step()
-
-        # TEST_TIMING_SPLIT END
+        if hasattr(ctrl, "step_esekf"):
+          ctrl.step_esekf()
 
         control_step += 1
         sim_time += model.opt.timestep
