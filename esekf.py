@@ -42,7 +42,7 @@ class ESEKF:
 
     # Độ lệch chuẩn ban đầu của trạng thái sai số
     sigma_p = np.array([0.01, 0.01, 0.01])       # [m]
-    sigma_v = np.array([0.01, 0.01, 0.01])          # [m/s]
+    sigma_v = np.array([0.001, 0.001, 0.001])          # [m/s]
     sigma_theta = np.deg2rad([1.0, 1.0, 1.0])       # roll, pitch, yaw [rad]
 
     self.P0 = np.diag(
@@ -62,7 +62,7 @@ class ESEKF:
     self.H_zupt[:, 3:6] = np.eye(3)
 
     # Độ lệch chuẩn của pseudo-measurement ZUPT
-    sigma_zupt = 0.001  # [m/s]
+    sigma_zupt = 0.0001  # [m/s]
     # Measurement covariance của ZUPT
     self.R_zupt = np.eye(3, dtype=float) * sigma_zupt**2
 

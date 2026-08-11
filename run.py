@@ -666,7 +666,13 @@ def main():
     mujoco.mj_forward(model, data)
     print("Vị trí site sau hiệu chỉnh:", data.site_xpos[site_id])
 
+    simulation_duration = 20.0  # [s]
+
     while v.is_running():
+      if data.time >= simulation_duration:
+        print(f"[SIMULATION] Đã chạy đủ {simulation_duration:.1f} s.")
+        break
+
       # Handle spacebar reset
       if state["reset"]:
         mujoco.mj_resetData(model, data)

@@ -17,7 +17,7 @@ class IMUG1Controller(run.G1Controller):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
-    self.lin_vel_x = 0.0
+    self.lin_vel_x = 0.45
     self.lin_vel_y = 0.0
     self.ang_vel_z = 0.0
 

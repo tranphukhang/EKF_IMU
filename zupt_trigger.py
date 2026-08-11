@@ -94,13 +94,13 @@ class ZUPTTrigger:
             self.last_print_time = -np.inf
 
         if current_time - self.last_print_time >= self.print_period:
-            print(
-                f"[ZUPT CHECK] "
-                f"t = {current_time:.3f} s | "
-                f"contact = {right_foot_contact} | "
-                f"|v_true| = {speed:.6f} m/s | "
-                f"candidate = {zupt_candidate}"
-            )
+            # print(
+            #     f"[ZUPT CHECK] "
+            #     f"t = {current_time:.3f} s | "
+            #     f"contact = {right_foot_contact} | "
+            #     f"|v_true| = {speed:.6f} m/s | "
+            #     f"candidate = {zupt_candidate}"
+            # )
             self.last_print_time = current_time
 
         return zupt_candidate
