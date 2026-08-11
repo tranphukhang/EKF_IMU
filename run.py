@@ -729,6 +729,8 @@ def main():
           target_pos = ctrl.step()
         ctrl.apply_pd_control(target_pos)
 
+        mujoco.mj_step(model, data)
+
         # ============================================================
         # TEST_TIMING_ONLY BEGIN
         # Kiểm tra giả thuyết:
