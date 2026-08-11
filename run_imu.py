@@ -90,16 +90,6 @@ class IMUG1Controller(run.G1Controller):
     # ZUPT correction
     zupt_active = self.zupt_trigger.check()
 
-    # ============================================================
-    # TEST_ONLY BEGIN
-    # Prediction-only test:
-    # Không cho ESEKF sử dụng bất kỳ measurement correction nào.
-    # Logger vẫn lưu ground truth để đối chiếu.
-    # Sau test xóa block này.
-    # ============================================================
-    zupt_active = False
-    # TEST_ONLY END
-
     # Ground-truth velocity của IMU trong world frame
     true_velocity = (
         self.zupt_trigger.get_true_linear_velocity()
