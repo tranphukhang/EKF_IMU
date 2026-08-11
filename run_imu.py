@@ -116,6 +116,14 @@ class IMUG1Controller(run.G1Controller):
         dtype=float,
     )
 
+    # Lấy quaternion thật từ MuJoCo trước
+    mujoco.mju_mat2Quat(
+        true_quaternion,
+        self.data.site_xmat[
+            self.esekf.site_id
+        ],
+    )
+
     # q và -q biểu diễn cùng một rotation.
     # Chọn dấu ground truth gần với quaternion ESEKF nhất
     # để thuận tiện khi plot và so sánh.
@@ -126,13 +134,6 @@ class IMUG1Controller(run.G1Controller):
         ) < 0.0
     ):
         true_quaternion *= -1.0
-
-    mujoco.mju_mat2Quat(
-        true_quaternion,
-        self.data.site_xmat[
-            self.esekf.site_id
-        ],
-    )
 
     self.data_logger.log(
         sample_time=float(self.data.time),
