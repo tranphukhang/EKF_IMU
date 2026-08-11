@@ -527,6 +527,16 @@ def main():
   print(f"Loading scene: {xml_path}")
   model = mujoco.MjModel.from_xml_path(str(xml_path))
   model.opt.timestep = 0.005  # 200 Hz — must match training
+
+  # ============================================================
+  # TEST_ONLY BEGIN
+  # Tắt toàn bộ sensor noise ở mức MuJoCo model để bảo đảm
+  # prediction-only test sử dụng IMU deterministic.
+  # Không sửa g1.xml; sau test chỉ cần xóa block này.
+  # ============================================================
+  model.sensor_noise[:] = 0.0
+  # TEST_ONLY END
+
   set_armature(model, joint_names)
 
   data = mujoco.MjData(model)
@@ -664,6 +674,17 @@ def main():
     data.qpos[root_qpos_adr]     -= site_world_pos[0]
     data.qpos[root_qpos_adr + 1] -= site_world_pos[1]
     mujoco.mj_forward(model, data)
+
+    # ============================================================
+    # TEST_ONLY BEGIN
+    # Khởi tạo ESEKF bằng ground truth SAU KHI đã đưa IMU site
+    # về origin x-y và TRƯỚC physics step đầu tiên.
+    # Sau test xóa block TEST_ONLY này.
+    # ============================================================
+    if hasattr(ctrl, "esekf"):
+        ctrl.esekf.test_initialize_from_ground_truth()
+    # TEST_ONLY END
+
     print("Vị trí site sau hiệu chỉnh:", data.site_xpos[site_id])
 
     simulation_duration = 20.0  # [s]

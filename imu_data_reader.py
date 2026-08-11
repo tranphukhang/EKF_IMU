@@ -35,6 +35,16 @@ class IMUDataReader:
     self.acc_noise_std = 0.0194162       # m/s^2
     self.gyro_noise_std = 0.0008639      # rad/s
 
+    # ============================================================
+    # TEST_ONLY BEGIN
+    # Prediction-only test:
+    # Tạm thời tắt nhiễu IMU để kiểm tra riêng mô hình propagation.
+    # Sau khi test xong, xóa block TEST_ONLY này.
+    # ============================================================
+    self.acc_noise_std = 0.0
+    self.gyro_noise_std = 0.0
+    # TEST_ONLY END
+
     # Bộ sinh số ngẫu nhiên
     self.rng = np.random.default_rng(42)
 

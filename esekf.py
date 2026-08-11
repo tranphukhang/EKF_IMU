@@ -337,6 +337,82 @@ class ESEKF:
     print(f"Min eigenvalue of P         = {min_eigenvalue:.3e}")
     print("================================================")
 
+
+  def test_initialize_from_ground_truth(self) -> None:
+    """
+    TEST_ONLY:
+    Khởi tạo nominal state ESEKF trực tiếp từ MuJoCo ground truth
+    để kiểm tra riêng prediction model.
+
+    Sau khi hoàn tất prediction-only test, xóa toàn bộ hàm này.
+    """
+
+    # ========================================================
+    # TEST_ONLY BEGIN
+    # ========================================================
+
+    # Ground-truth position của IMU site trong world frame
+    gt_position = (
+        self.data.site_xpos[
+            self.site_id
+        ].copy()
+    )
+
+    # Ground-truth velocity của IMU site trong world frame
+    site_velocity_6d = np.zeros(
+        6,
+        dtype=float,
+    )
+
+    mujoco.mj_objectVelocity(
+        self.model,
+        self.data,
+        mujoco.mjtObj.mjOBJ_SITE,
+        self.site_id,
+        site_velocity_6d,
+        0,  # world frame
+    )
+
+    gt_velocity = site_velocity_6d[3:6].copy()
+
+    # Ground-truth quaternion IMU -> world [w, x, y, z]
+    gt_quaternion = np.empty(
+        4,
+        dtype=float,
+    )
+
+    mujoco.mju_mat2Quat(
+        gt_quaternion,
+        self.data.site_xmat[
+            self.site_id
+        ],
+    )
+
+    mujoco.mju_normalize4(
+        gt_quaternion
+    )
+
+    # Đưa ground truth vào nominal state
+    self.position[:] = gt_position
+    self.velocity[:] = gt_velocity
+    self.quaternion[:] = gt_quaternion
+
+    # Cập nhật lại x0_hat để phần print initial state
+    # hiển thị đúng trạng thái dùng cho prediction-only test.
+    self.x0_hat[:] = self.x_hat.copy()
+
+    # Reset covariance về P0
+    self.P = self.P0.copy()
+
+    print("\n============================================")
+    print("TEST_ONLY: ESEKF INITIALIZED FROM GROUND TRUTH")
+    print(f"p0_gt = {self.position}")
+    print(f"v0_gt = {self.velocity}")
+    print(f"q0_gt = {self.quaternion}")
+    print("============================================\n")
+
+    # TEST_ONLY END
+
   
   def initialize_once(self) -> None:
     """Print the declared initial nominal state once."""
