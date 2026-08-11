@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 from pathlib import Path
 
+from datetime import datetime
 import numpy as np
 
 
@@ -16,10 +17,16 @@ class SimulationDataLogger:
     ) -> None:
 
         if output_path is None:
+            run_timestamp = datetime.now().strftime(
+                "%Y-%m-%d_%H-%M-%S"
+            )
+
             output_path = (
                 Path(__file__).resolve().parent
                 / "logs"
-                / "esekf_simulation_20s.csv"
+                / run_timestamp
+                / "data"
+                / "esekf_simulation.csv"
             )
 
         self.output_path = Path(output_path)
