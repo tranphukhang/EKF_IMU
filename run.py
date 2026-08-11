@@ -526,7 +526,7 @@ def main():
   xml_path = SCRIPT_DIR / "scene.xml"
   print(f"Loading scene: {xml_path}")
   model = mujoco.MjModel.from_xml_path(str(xml_path))
-  model.opt.timestep = 0.005  # 200 Hz — must match training
+  model.opt.timestep = 0.001  # 1000 Hz — must match training
   set_armature(model, joint_names)
 
   data = mujoco.MjData(model)
@@ -622,7 +622,27 @@ def main():
   # ------------------------------------------------------------------- #
   from mujoco import viewer
 
-  decimation = 4
+  # ============================================================
+  # Sampling rates
+  # ============================================================
+
+  policy_period = 1.0 / 50.0   # Policy: 50 Hz
+  esekf_period = 1.0 / 200.0   # IMU + ESEKF: 200 Hz
+
+  policy_decimation = int(
+      round(policy_period / model.opt.timestep)
+  )
+
+  esekf_decimation = int(
+      round(esekf_period / model.opt.timestep)
+  )
+
+  print(
+      f"Physics: {1.0 / model.opt.timestep:.0f} Hz | "
+      f"Policy: {1.0 / (policy_decimation * model.opt.timestep):.0f} Hz | "
+      f"ESEKF: {1.0 / (esekf_decimation * model.opt.timestep):.0f} Hz"
+  )
+
   control_step = 0
   target_pos = ctrl.default_joint_pos.copy()
   sim_time = 0.0
@@ -704,13 +724,17 @@ def main():
           sim_time < wall
           and data.time < simulation_duration
       ):
-        if control_step % decimation == 0:
+        if control_step % policy_decimation == 0:
           target_pos = ctrl.step()
         ctrl.apply_pd_control(target_pos)
         mujoco.mj_step(model, data)
 
-        if hasattr(ctrl, "step_esekf"):
-          ctrl.step_esekf()
+        # IMU + ESEKF chỉ chạy mỗi 0.005 s = 200 Hz
+        if (
+            hasattr(ctrl, "step_esekf")
+            and (control_step + 1) % esekf_decimation == 0
+        ):
+            ctrl.step_esekf()
 
         control_step += 1
         sim_time += model.opt.timestep

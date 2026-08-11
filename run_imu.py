@@ -30,7 +30,15 @@ class IMUG1Controller(run.G1Controller):
       site_name="imu_right_foot",
     )
 
-    self.esekf.delta_t = float(self.model.opt.timestep)
+    # ESEKF chạy cố định ở 200 Hz,
+    # độc lập với physics timestep của MuJoCo
+    self.esekf.delta_t = 0.005
+
+    # Giữ Q nhất quán với sampling period của ESEKF
+    self.esekf.Q = (
+        self.esekf.Qc
+        / self.esekf.delta_t
+    )
 
     self.imu_trajectory = SiteTrajectoryVisualizer(
       self.model,
