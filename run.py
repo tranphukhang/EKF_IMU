@@ -475,9 +475,33 @@ class CameraRenderer:
     self.data = data
     self.renderer = mujoco.Renderer(model, height, width)
 
+    # Visualization options cho video
+    self.scene_option = mujoco.MjvOption()
+
+    # Geom group:
+    # group 2: OFF
+    # group 3: ON
+    self.scene_option.geomgroup[2] = 0
+    self.scene_option.geomgroup[3] = 1
+
+    # Tương đương:
+    # Label -> Site
+    self.scene_option.label = (
+        mujoco.mjtLabel.mjLABEL_SITE
+    )
+
+    # Frame -> Site
+    self.scene_option.frame = (
+        mujoco.mjtFrame.mjFRAME_SITE
+    )
+
   def render(self, camera_name: str) -> np.ndarray:
-    """Render from a named camera, return RGB array (H, W, 3)."""
-    self.renderer.update_scene(self.data, camera=camera_name)
+    self.renderer.update_scene(
+        self.data,
+        camera=camera_name,
+        scene_option=self.scene_option,
+    )
+
     return self.renderer.render().copy()
 
 
