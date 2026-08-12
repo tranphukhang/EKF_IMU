@@ -526,7 +526,7 @@ def main():
   xml_path = SCRIPT_DIR / "scene.xml"
   print(f"Loading scene: {xml_path}")
   model = mujoco.MjModel.from_xml_path(str(xml_path))
-  model.opt.timestep = 0.0001  # 1000 Hz — must match training
+  model.opt.timestep = 0.001  # 1000 Hz — MuJoCo physics
   set_armature(model, joint_names)
 
   data = mujoco.MjData(model)
@@ -568,27 +568,64 @@ def main():
     right_reacher(_dummy36)
   print("  Policies warm.")
 
-  # Camera renderer (offscreen, for head/wrist cam windows)
-  cam_renderer = None
-  cv2 = None
-  show_head_cam = not args.no_cameras
-  show_wrist_cam = not args.no_cameras
-  if not args.no_cameras:
-    try:
-      import cv2 as _cv2
-      cv2 = _cv2
-      cam_renderer = CameraRenderer(model, data, 320, 240)
-      # Warm up renderer (first call compiles shaders)
-      cam_renderer.render("head_cam")
-      cam_renderer.render("wrist_cam")
-      print("  Camera renderer ready (head_cam, wrist_cam).")
-    except ImportError:
-      print("  [WARN] opencv-python not installed — camera windows disabled.")
-      print("  Install with: pip install opencv-python")
-      show_head_cam = show_wrist_cam = False
-    except Exception as e:
-      print(f"  [WARN] Camera renderer init failed: {e}")
-      show_head_cam = show_wrist_cam = False
+  # ============================================================
+  # Headless video recording
+  # ============================================================
+  import cv2
+
+  video_fps = 30
+  video_width = 1280
+  video_height = 720
+
+  # Kích thước offscreen framebuffer
+  model.vis.global_.offwidth = video_width
+  model.vis.global_.offheight = video_height
+
+  video_dir = SCRIPT_DIR / "videos"
+  video_dir.mkdir(
+      parents=True,
+      exist_ok=True,
+  )
+
+  timestamp = time.strftime(
+      "%Y-%m-%d_%H-%M-%S"
+  )
+
+  video_path = (
+      video_dir
+      / f"simulation_{timestamp}.mp4"
+  )
+
+  video_renderer = CameraRenderer(
+      model,
+      data,
+      width=video_width,
+      height=video_height,
+  )
+
+  fourcc = cv2.VideoWriter_fourcc(
+      *"mp4v"
+  )
+
+  video_writer = cv2.VideoWriter(
+      str(video_path),
+      fourcc,
+      video_fps,
+      (
+          video_width,
+          video_height,
+      ),
+  )
+
+  if not video_writer.isOpened():
+      raise RuntimeError(
+          "Không thể tạo video writer."
+      )
+
+  print(
+      f"[VIDEO] Recording to: "
+      f"{video_path}"
+  )
 
   # Print controls
   print(f"\n{'='*50}")
