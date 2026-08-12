@@ -627,38 +627,6 @@ def main():
       f"{video_path}"
   )
 
-  # Print controls
-  print(f"\n{'='*50}")
-  print("G1 TABLE RED BLOCK — MuJoCo Standalone")
-  print(f"{'='*50}")
-  print("  .          Toggle WALK / REACH mode")
-  print("  --- WALK mode ---")
-  print("  Arrows     Walk fwd/back, strafe L/R")
-  print("  ; / '      Turn left / right")
-  print("  \\          Stop")
-  print("  --- REACH mode ---")
-  print("  Up/Down    Reach forward / backward")
-  print("  Left/Right Reach left / right")
-  print("  ; / '      Reach up / down")
-  print("  \\          Reset reach target")
-  print("  --- Always ---")
-  print("  Space      Reset robot")
-  print(f"{'='*50}\n")
-
-  # Mutable state for key callback
-  state = {"reset": False}
-
-  def on_key(keycode: int) -> None:
-    if keycode == 32:  # Space
-      state["reset"] = True
-    else:
-      ctrl.key_callback(keycode)
-
-  # ------------------------------------------------------------------- #
-  # Simulation loop using launch_passive (MuJoCo's built-in viewer)
-  # ------------------------------------------------------------------- #
-  from mujoco import viewer
-
   # ============================================================
   # Sampling rates
   # ============================================================
@@ -682,139 +650,141 @@ def main():
 
   control_step = 0
   target_pos = ctrl.default_joint_pos.copy()
-  sim_time = 0.0
-  last_cam_render = 0.0
-  cam_interval = 1.0 / args.cam_fps
 
-  print("Launching MuJoCo viewer...")
+  # ============================================================
+  # Initial alignment
+  # ============================================================
 
-  with viewer.launch_passive(model, data, key_callback=on_key) as v:
+  mujoco.mj_forward(model, data)
 
-    tracking_cam_id = mujoco.mj_name2id(
-      model,
-      mujoco.mjtObj.mjOBJ_CAMERA,
-      "tracking"
-    )
-    with v.lock():
-      v.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
-      v.cam.fixedcamid = tracking_cam_id
-
-    # Reset clock AFTER viewer opens — prevents catchup lag burst on startup
-    t0 = time.time()
-
-    viewer_interval = 1.0 / 60.0
-    last_viewer_sync = time.perf_counter()
-
-    mujoco.mj_forward(model, data)
-    site_id = mujoco.mj_name2id(
+  site_id = mujoco.mj_name2id(
       model,
       mujoco.mjtObj.mjOBJ_SITE,
-      "imu_right_foot"
-    )
-    root_joint_id = mujoco.mj_name2id(
+      "imu_right_foot",
+  )
+
+  root_joint_id = mujoco.mj_name2id(
       model,
       mujoco.mjtObj.mjOBJ_JOINT,
-      "floating_base_joint"
-    )
-    root_qpos_adr = model.jnt_qposadr[root_joint_id]
-    site_world_pos = data.site_xpos[site_id].copy()
-    data.qpos[root_qpos_adr]     -= site_world_pos[0]
-    data.qpos[root_qpos_adr + 1] -= site_world_pos[1]
-    mujoco.mj_forward(model, data)
-    print("Vị trí site sau hiệu chỉnh:", data.site_xpos[site_id])
+      "floating_base_joint",
+  )
 
-    simulation_duration = 20.0  # [s]
+  root_qpos_adr = model.jnt_qposadr[
+      root_joint_id
+  ]
 
-    while v.is_running():
-      if data.time >= simulation_duration:
-        print(f"[SIMULATION] Đã chạy đủ {simulation_duration:.1f} s.")
-        break
+  site_world_pos = data.site_xpos[
+      site_id
+  ].copy()
 
-      # Handle spacebar reset
-      if state["reset"]:
-        mujoco.mj_resetData(model, data)
-        data.qpos[0] = -0.6
-        data.qpos[2] = 0.76
-        data.qpos[3:7] = [1, 0, 0, 0]
-        for name, value in config["default_joint_pos"].items():
-          if name in joint_names:
-            data.qpos[7 + joint_names.index(name)] = value
-        mujoco.mj_forward(model, data)
-        ctrl.last_action[:] = 0
-        ctrl.last_arm_action[:] = 0
-        ctrl.lin_vel_x = ctrl.lin_vel_y = ctrl.ang_vel_z = 0.0
-        ctrl.reach_active = False
-        ctrl.last_arm_target = None
-        ctrl.frozen_arm_pos = None
-        ctrl.grip_closed = False
-        ctrl.input_mode = "walk"
-        target_pos = ctrl.default_joint_pos.copy()
-        state["reset"] = False
-        print("[RESET] Robot reset → WALK mode")
+  data.qpos[root_qpos_adr] -= (
+      site_world_pos[0]
+  )
 
-      # Step physics in real time (cap catchup to avoid jitter snowball)
-      wall = time.time() - t0
-      max_catchup = 0.05  # Never try to catch up more than 50ms per frame
-      if wall - sim_time > max_catchup:
-        sim_time = wall - max_catchup
-      while (
-          sim_time < wall
-          and data.time < simulation_duration
+  data.qpos[root_qpos_adr + 1] -= (
+      site_world_pos[1]
+  )
+
+  mujoco.mj_forward(model, data)
+
+  print(
+      "Vị trí site sau hiệu chỉnh:",
+      data.site_xpos[site_id],
+  )
+
+  simulation_duration = 20.0
+
+  # Frame đầu tiên của video tại khoảng 1/30 s
+  next_video_time = (
+      1.0 / video_fps
+  )
+
+  print(
+      "[SIMULATION] Running headless..."
+  )
+
+  while data.time < simulation_duration:
+
+      # ========================================
+      # Policy: 50 Hz
+      # ========================================
+      if (
+          control_step
+          % policy_decimation
+          == 0
       ):
-        if control_step % policy_decimation == 0:
           target_pos = ctrl.step()
-        ctrl.apply_pd_control(target_pos)
-        mujoco.mj_step(model, data)
 
-        # IMU + ESEKF chỉ chạy mỗi 0.005 s = 200 Hz
-        if (
-            hasattr(ctrl, "step_esekf")
-            and (control_step + 1) % esekf_decimation == 0
-        ):
-            ctrl.step_esekf()
+      # Giữ target cho physics
+      ctrl.apply_pd_control(
+          target_pos
+      )
 
-        control_step += 1
-        sim_time += model.opt.timestep
+      # ========================================
+      # MuJoCo physics
+      # ========================================
+      mujoco.mj_step(
+          model,
+          data,
+      )
 
-      if data.time >= simulation_duration:
-        print(
-            f"[SIMULATION] Đã chạy đủ "
-            f"{simulation_duration:.1f} s."
-        )
-        break
+      # ========================================
+      # IMU + ESEKF: 200 Hz
+      # ========================================
+      if (
+          hasattr(
+              ctrl,
+              "step_esekf",
+          )
+          and
+          (control_step + 1)
+          % esekf_decimation
+          == 0
+      ):
+          ctrl.step_esekf()
 
-      now = time.perf_counter()
-      if now - last_viewer_sync >= viewer_interval:
-          v.sync()
-          last_viewer_sync = now
-      time.sleep(0.001)
+      # ========================================
+      # Video: 30 FPS
+      # ========================================
+      if (
+          data.time
+          >= next_video_time
+      ):
+          frame_rgb = (
+              video_renderer.render(
+                  "tracking"
+              )
+          )
 
-      # Sync viewer
-      # v.sync()
+          frame_bgr = cv2.cvtColor(
+              frame_rgb,
+              cv2.COLOR_RGB2BGR,
+          )
 
-      # Render camera views at lower FPS
-      if cam_renderer and cv2 and (show_head_cam or show_wrist_cam):
-        now = time.time()
-        if now - last_cam_render >= cam_interval:
-          last_cam_render = now
-          if show_head_cam:
-            img = cam_renderer.render("head_cam")
-            cv2.imshow("Head Camera", cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-          if show_wrist_cam:
-            img = cam_renderer.render("wrist_cam")
-            cv2.imshow("Wrist Camera", cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-          cv2.waitKey(1)
+          video_writer.write(
+              frame_bgr
+          )
+
+          next_video_time += (
+              1.0 / video_fps
+          )
+
+      control_step += 1
+
+  video_writer.release()
+
+  print(
+      f"[VIDEO] Saved: "
+      f"{video_path}"
+  )
+
+  print(
+      f"[SIMULATION] Đã chạy đủ "
+      f"{simulation_duration:.1f} s."
+  )
 
   if hasattr(ctrl, "data_logger"):
     ctrl.data_logger.save()
-
-  # Cleanup
-  if cv2:
-    try:
-      cv2.destroyAllWindows()
-    except Exception:
-      pass
-  print("Done.")
 
 
 if __name__ == "__main__":
