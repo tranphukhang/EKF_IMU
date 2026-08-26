@@ -8,9 +8,10 @@ class ZUPTTrigger:
         model,
         data,
         site_name="imu_right_foot",
+        velocity_threshold=0.01,
         print_hz=5.0,
     ):
-        
+        self.velocity_threshold = velocity_threshold
         self.model = model
         self.data = data
 
@@ -85,7 +86,10 @@ class ZUPTTrigger:
             self.right_foot_ground_contact()
         )
 
-        zupt_candidate = right_foot_contact
+        zupt_candidate = (
+            right_foot_contact
+            and speed < self.velocity_threshold
+        )
 
 
         current_time = float(self.data.time)
