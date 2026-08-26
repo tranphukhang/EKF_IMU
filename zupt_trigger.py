@@ -8,7 +8,7 @@ class ZUPTTrigger:
         model,
         data,
         site_name="imu_right_foot",
-        velocity_threshold=0.01,
+        velocity_threshold=0.05,
         print_hz=5.0,
     ):
         self.velocity_threshold = velocity_threshold

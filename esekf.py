@@ -213,7 +213,7 @@ class ESEKF:
 
     assert measured_velocity.shape == (3,)
 
-    # Ground-truth velocity measurement từ MuJoCo
+    # Pseudo-measurement ZUPT: vận tốc bằng 0
     z = measured_velocity.copy()
 
     # h(x_hat) = v_hat
