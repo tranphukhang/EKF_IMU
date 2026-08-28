@@ -24,13 +24,10 @@ class IMUG1Controller(run.G1Controller):
     self.lin_vel_y = 0.0
     self.ang_vel_z = 0.0
 
-    self.zupt_trigger = ZUPTTrigger(
+    self.esekf = ESEKF(
         self.model,
         self.data,
         site_name="imu_right_foot",
-        velocity_threshold=0.05,
-        min_contact_points=3,
-        print_hz=5.0,
     )
 
     # ESEKF chạy cố định ở 200 Hz,
@@ -41,6 +38,15 @@ class IMUG1Controller(run.G1Controller):
     self.esekf.Q = (
         self.esekf.Qc
         / self.esekf.delta_t
+    )
+
+    self.zupt_trigger = ZUPTTrigger(
+        self.model,
+        self.data,
+        site_name="imu_right_foot",
+        velocity_threshold=0.05,
+        min_contact_points=3,
+        print_hz=5.0,
     )
 
     self.imu_trajectory = SiteTrajectoryVisualizer(
