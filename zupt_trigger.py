@@ -120,7 +120,8 @@ class ZUPTTrigger:
             # print(
             #     f"[ZUPT CHECK] "
             #     f"t = {current_time:.3f} s | "
-            #     f"contact = {right_foot_contact} | "
+            #     f"contacts = {contact_count} | "
+            #     f"sufficient = {sufficient_contact} | "
             #     f"|v_true| = {speed:.6f} m/s | "
             #     f"candidate = {zupt_candidate}"
             # )
