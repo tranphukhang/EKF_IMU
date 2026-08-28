@@ -716,6 +716,14 @@ def main():
       data.site_xpos[site_id],
   )
 
+  # Đọc và lưu mẫu IMU tại t_0.
+  # Mẫu này sẽ được dùng để dự đoán x_1.
+  if hasattr(
+      ctrl,
+      "initialize_esekf_input",
+  ):
+      ctrl.initialize_esekf_input()
+
   simulation_duration = 20.0
 
   # Frame đầu tiên của video tại khoảng 1/30 s

@@ -68,6 +68,32 @@ class IMUG1Controller(run.G1Controller):
 
     self.data_logger = SimulationDataLogger()
 
+    # Mẫu IMU tại k-1 dùng để dự đoán trạng thái tại k
+    self.previous_acceleration = None
+    self.previous_angular_velocity = None
+    self.previous_imu_time = None
+
+  def initialize_esekf_input(self) -> None:
+    """Lưu mẫu IMU ban đầu u_0 để dự đoán x_1."""
+
+    acceleration, angular_velocity = (
+        self.imu_reader.update()
+    )
+
+    self.previous_acceleration = (
+        acceleration.copy()
+    )
+
+    self.previous_angular_velocity = (
+        angular_velocity.copy()
+    )
+
+    self.previous_imu_time = float(
+        self.data.time
+    )
+
+    self.esekf.initialize_once()
+
 
   def step(self):
     target_pos = super().step()
@@ -76,35 +102,47 @@ class IMUG1Controller(run.G1Controller):
 
   def step_esekf(self) -> None:
 
-    # Luôn đọc IMU để vẫn quan sát được transient ban đầu
-    acceleration, angular_velocity = self.imu_reader.update()
+    # Đọc mẫu IMU hiện tại u_k
+    current_acceleration, current_angular_velocity = (
+        self.imu_reader.update()
+    )
 
-    # Luôn plot raw IMU
+    current_imu_time = float(
+        self.data.time
+    )
+
+    # Hiển thị dữ liệu IMU tại đúng thời điểm đo t_k
     self.imu_visualizer.update(
-        sample_time=self.data.time,
-        acceleration=acceleration,
-        angular_velocity=angular_velocity,
+        sample_time=current_imu_time,
+        acceleration=current_acceleration,
+        angular_velocity=current_angular_velocity,
     )
 
-    # Chỉ khởi tạo ESEKF sau khi robot đã settle
-    self.esekf.initialize_once()
+    if (
+        self.previous_acceleration is None
+        or self.previous_angular_velocity is None
+    ):
+        raise RuntimeError(
+            "Mẫu IMU ban đầu chưa được khởi tạo."
+        )
 
-    # Prediction
+    # Dự đoán x_k từ x_{k-1} bằng u_{k-1}
     self.esekf.predict(
-        acceleration=acceleration,
-        angular_velocity=angular_velocity,
+        acceleration=self.previous_acceleration,
+        angular_velocity=self.previous_angular_velocity,
     )
 
-    # ZUPT correction
+    # ZUPT correction tại thời điểm t_k
     zupt_active = self.zupt_trigger.check()
 
-    # Ground-truth velocity của IMU trong world frame
     true_velocity = (
         self.zupt_trigger.get_true_linear_velocity()
     )
 
     if zupt_active:
-        self.esekf.correct_zupt(true_velocity)
+        self.esekf.correct_zupt(
+            true_velocity
+        )
 
     # Lấy trạng thái danh định sau predict/correction
     estimated_position = self.esekf.position.copy()
@@ -144,10 +182,10 @@ class IMUG1Controller(run.G1Controller):
         true_quaternion *= -1.0
 
     self.data_logger.log(
-        sample_time=float(self.data.time),
+        sample_time=current_imu_time,
 
-        acceleration=acceleration,
-        angular_velocity=angular_velocity,
+        acceleration=current_acceleration,
+        angular_velocity=current_angular_velocity,
 
         gt_position=true_position,
         gt_velocity=true_velocity,
@@ -167,6 +205,20 @@ class IMUG1Controller(run.G1Controller):
         estimated_position,
         estimated_velocity,
         estimated_quaternion,
+    )
+
+    # Lưu u_k để sử dụng cho lần dự đoán tiếp theo:
+    # x_{k+1} = f(x_k, u_k)
+    self.previous_acceleration = (
+        current_acceleration.copy()
+    )
+
+    self.previous_angular_velocity = (
+        current_angular_velocity.copy()
+    )
+
+    self.previous_imu_time = (
+        current_imu_time
     )
 
 
