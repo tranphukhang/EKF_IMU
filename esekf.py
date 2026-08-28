@@ -125,12 +125,12 @@ class ESEKF:
 
     rotation_imu_to_world = rotation_flat.reshape(3, 3)
 
-    # R_{k-1} a_m,k
+    # R(q_{k-1}) a_{m,k-1}
     rotated_acceleration = (
         rotation_imu_to_world @ acceleration
     )
 
-    # Jacobian trạng thái sai số F_x,k
+    # Jacobian trạng thái sai số F_x,k-1
     Fx = np.eye(9, dtype=float)
     Fx[0:3, 3:6] = (
         np.eye(3) * self.delta_t
@@ -141,7 +141,7 @@ class ESEKF:
     )
     self.Fx = Fx
 
-    # Jacobian nhiễu quá trình F_i,k
+    # Jacobian nhiễu quá trình F_i,k-1
     Fi = np.zeros((9, 6), dtype=float)
     Fi[3:6, 0:3] = (
         -rotation_imu_to_world
@@ -161,7 +161,7 @@ class ESEKF:
     # Giữ P đối xứng do sai số số học
     self.P = 0.5 * (self.P + self.P.T)
 
-    # a^w_k = R(q_k-1) a_k + g
+    # a^w_{k-1} = R(q_{k-1}) a_{m,k-1} + g
     acceleration_world = (
         rotated_acceleration
         + self.gravity
@@ -179,7 +179,7 @@ class ESEKF:
         + acceleration_world * self.delta_t
     )
 
-    # q_k = q_k-1 ⊗ q{omega_k * delta_t}
+    # q_k = q_{k-1} ⊗ q{omega_{m,k-1} * delta_t}
     quaternion_new = quaternion_previous.copy()
     mujoco.mju_quatIntegrate(
         quaternion_new,

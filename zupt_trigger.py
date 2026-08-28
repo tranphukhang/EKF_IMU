@@ -10,10 +10,12 @@ class ZUPTTrigger:
         site_name="imu_right_foot",
         velocity_threshold=0.05,
         print_hz=5.0,
+        min_contact_points=3,
     ):
         self.velocity_threshold = velocity_threshold
         self.model = model
         self.data = data
+        self.min_contact_points = min_contact_points
 
         self.site_id = mujoco.mj_name2id(
             model,
@@ -42,19 +44,31 @@ class ZUPTTrigger:
         self.last_print_time = -np.inf
 
 
-    def right_foot_ground_contact(self) -> bool:
+    def right_foot_ground_contact_count(self) -> int:
+        contact_count = 0
+
         for i in range(self.data.ncon):
             contact = self.data.contact[i]
+
             geom1 = contact.geom1
             geom2 = contact.geom2
 
-            if geom1 == self.ground_geom_id and geom2 in self.right_foot_geom_ids:
-                return True
+            foot_ground_contact = (
+                (
+                    geom1 == self.ground_geom_id
+                    and geom2 in self.right_foot_geom_ids
+                )
+                or
+                (
+                    geom2 == self.ground_geom_id
+                    and geom1 in self.right_foot_geom_ids
+                )
+            )
 
-            if geom2 == self.ground_geom_id and geom1 in self.right_foot_geom_ids:
-                return True
+            if foot_ground_contact:
+                contact_count += 1
 
-        return False
+        return contact_count
 
     def get_true_linear_velocity(self) -> np.ndarray:
         """Ground-truth linear velocity của IMU site trong world frame."""
@@ -82,12 +96,17 @@ class ZUPTTrigger:
             true_linear_velocity
         )
 
-        right_foot_contact = (
-            self.right_foot_ground_contact()
+        contact_count = (
+            self.right_foot_ground_contact_count()
+        )
+
+        sufficient_contact = (
+            contact_count
+            >= self.min_contact_points
         )
 
         zupt_candidate = (
-            right_foot_contact
+            sufficient_contact
             and speed < self.velocity_threshold
         )
 
