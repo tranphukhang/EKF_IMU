@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import atexit
+from datetime import datetime
 from pathlib import Path
 
-from datetime import datetime
 import numpy as np
 
 
@@ -29,61 +29,105 @@ class SimulationDataLogger:
                 / "esekf_simulation.csv"
             )
 
-        self.output_path = Path(output_path)
+        self.output_path = Path(
+            output_path
+        )
 
         self.rows: list[np.ndarray] = []
         self.saved = False
 
         self.header = [
+            # ==================================================
             # Time
+            # ==================================================
             "time",
 
-            # IMU acceleration [m/s^2]
+            # ==================================================
+            # IMU acceleration có nhiễu [m/s^2]
+            # ==================================================
             "imu_ax",
             "imu_ay",
             "imu_az",
 
-            # IMU angular velocity [rad/s]
+            # ==================================================
+            # IMU angular velocity có nhiễu [rad/s]
+            # ==================================================
             "imu_gx",
             "imu_gy",
             "imu_gz",
 
+            # ==================================================
+            # Ground-truth accelerometer output [m/s^2]
+            # Noise-free MuJoCo sensor output
+            # Hệ tọa độ site/IMU
+            # ==================================================
+            "gt_imu_ax",
+            "gt_imu_ay",
+            "gt_imu_az",
+
+            # ==================================================
+            # Ground-truth gyroscope output [rad/s]
+            # Noise-free MuJoCo sensor output
+            # Hệ tọa độ site/IMU
+            # ==================================================
+            "gt_imu_gx",
+            "gt_imu_gy",
+            "gt_imu_gz",
+
+            # ==================================================
             # Ground-truth position [m]
+            # Hệ tọa độ world
+            # ==================================================
             "gt_px",
             "gt_py",
             "gt_pz",
 
+            # ==================================================
             # Ground-truth velocity [m/s]
+            # Hệ tọa độ world
+            # ==================================================
             "gt_vx",
             "gt_vy",
             "gt_vz",
 
+            # ==================================================
             # Ground-truth quaternion IMU -> world
+            # ==================================================
             "gt_qw",
             "gt_qx",
             "gt_qy",
             "gt_qz",
 
+            # ==================================================
             # ESEKF estimated position [m]
+            # ==================================================
             "est_px",
             "est_py",
             "est_pz",
 
+            # ==================================================
             # ESEKF estimated velocity [m/s]
+            # ==================================================
             "est_vx",
             "est_vy",
             "est_vz",
 
+            # ==================================================
             # ESEKF estimated quaternion IMU -> world
+            # ==================================================
             "est_qw",
             "est_qx",
             "est_qy",
             "est_qz",
 
+            # ==================================================
             # Correction flag
+            # ==================================================
             "correction_applied",
 
-            # Diagonal of ESEKF error-state covariance P
+            # ==================================================
+            # Diagonal của ESEKF error-state covariance P
+            # ==================================================
             "P_dpx",
             "P_dpy",
             "P_dpz",
@@ -99,13 +143,17 @@ class SimulationDataLogger:
 
         # Nếu chương trình kết thúc bất thường hoặc user đóng viewer,
         # vẫn cố gắng lưu dữ liệu đã thu được.
-        atexit.register(self.save)
+        atexit.register(
+            self.save
+        )
 
     def log(
         self,
         sample_time: float,
         acceleration: np.ndarray,
         angular_velocity: np.ndarray,
+        ground_truth_acceleration: np.ndarray,
+        ground_truth_angular_velocity: np.ndarray,
         gt_position: np.ndarray,
         gt_velocity: np.ndarray,
         gt_quaternion: np.ndarray,
@@ -123,6 +171,16 @@ class SimulationDataLogger:
 
         angular_velocity = np.asarray(
             angular_velocity,
+            dtype=float,
+        ).reshape(3)
+
+        ground_truth_acceleration = np.asarray(
+            ground_truth_acceleration,
+            dtype=float,
+        ).reshape(3)
+
+        ground_truth_angular_velocity = np.asarray(
+            ground_truth_angular_velocity,
             dtype=float,
         ).reshape(3)
 
@@ -162,36 +220,56 @@ class SimulationDataLogger:
         ).reshape(9, 9)
 
         # Chỉ log diagonal của P
-        P_diag = np.diag(covariance)
+        P_diag = np.diag(
+            covariance
+        )
 
         row = np.concatenate([
-            np.array([sample_time]),
+            np.array([
+                sample_time
+            ]),
 
+            # IMU có nhiễu
             acceleration,
             angular_velocity,
 
+            # IMU ground truth
+            ground_truth_acceleration,
+            ground_truth_angular_velocity,
+
+            # Ground-truth state
             gt_position,
             gt_velocity,
             gt_quaternion,
 
+            # ESEKF estimated state
             est_position,
             est_velocity,
             est_quaternion,
 
+            # Correction flag
             np.array([
-                1.0 if correction_applied else 0.0
+                1.0
+                if correction_applied
+                else 0.0
             ]),
 
+            # Covariance diagonal
             P_diag,
         ])
 
-        if row.size != len(self.header):
+        if row.size != len(
+            self.header
+        ):
             raise RuntimeError(
-                f"Logger expected {len(self.header)} values, "
+                f"Logger expected "
+                f"{len(self.header)} values, "
                 f"but received {row.size}"
             )
 
-        self.rows.append(row)
+        self.rows.append(
+            row
+        )
 
     def save(self) -> None:
 
@@ -206,13 +284,17 @@ class SimulationDataLogger:
             exist_ok=True,
         )
 
-        data = np.vstack(self.rows)
+        data = np.vstack(
+            self.rows
+        )
 
         np.savetxt(
             self.output_path,
             data,
             delimiter=",",
-            header=",".join(self.header),
+            header=",".join(
+                self.header
+            ),
             comments="",
             fmt="%.10e",
         )
@@ -220,8 +302,25 @@ class SimulationDataLogger:
         self.saved = True
 
         print("\n=== DATA LOGGER ===")
-        print(f"Saved file: {self.output_path}")
-        print(f"Samples   : {data.shape[0]}")
-        print(f"Start time: {data[0, 0]:.4f} s")
-        print(f"End time  : {data[-1, 0]:.4f} s")
+
+        print(
+            f"Saved file: "
+            f"{self.output_path}"
+        )
+
+        print(
+            f"Samples   : "
+            f"{data.shape[0]}"
+        )
+
+        print(
+            f"Start time: "
+            f"{data[0, 0]:.4f} s"
+        )
+
+        print(
+            f"End time  : "
+            f"{data[-1, 0]:.4f} s"
+        )
+
         print("===================\n")
