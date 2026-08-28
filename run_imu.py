@@ -68,13 +68,6 @@ class IMUG1Controller(run.G1Controller):
       plot_fps=10.0,
     )
 
-    self.zupt_trigger = ZUPTTrigger(
-        self.model,
-        self.data,
-        site_name="imu_right_foot",
-        print_hz=5.0,
-    )
-
     self.data_logger = SimulationDataLogger()
 
     # Mẫu IMU tại k-1 dùng để dự đoán trạng thái tại k

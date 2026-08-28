@@ -173,7 +173,7 @@ class ESEKF:
         + velocity_previous * self.delta_t
     )
 
-    # v_k = v_k-1 + a^w_k * delta_t
+    # v_k = v_{k-1} + a^w_{k-1} * delta_t
     velocity_new = (
         velocity_previous
         + acceleration_world * self.delta_t
